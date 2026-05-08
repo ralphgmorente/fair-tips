@@ -8,10 +8,12 @@ import {
   Download,
   FileCheck2,
   FileSpreadsheet,
+  LockKeyhole,
   RotateCcw,
+  ShieldCheck,
   Upload
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { exportTipWorkbook } from "@/lib/export-results";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
@@ -40,6 +42,7 @@ const emptyUpload: UploadState = {
 };
 
 export default function Home() {
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [salesUpload, setSalesUpload] = useState<UploadState>(emptyUpload);
   const [timesheetUpload, setTimesheetUpload] = useState<UploadState>(emptyUpload);
   const [result, setResult] = useState<CalculationResult | null>(null);
@@ -48,6 +51,21 @@ export default function Home() {
   const canCalculate = uploadsReady;
   const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
   const blockingUploadError = Boolean(salesUpload.error || timesheetUpload.error);
+
+  useEffect(() => {
+    setIsUnlocked(sessionStorage.getItem("fairTipsUnlocked") === "true");
+  }, []);
+
+  function handleUnlock() {
+    sessionStorage.setItem("fairTipsUnlocked", "true");
+    setIsUnlocked(true);
+  }
+
+  function handleLock() {
+    sessionStorage.removeItem("fairTipsUnlocked");
+    setIsUnlocked(false);
+    handleReset();
+  }
 
   async function handleUpload(kind: "sales" | "timesheet", file: File | null) {
     if (!file) {
@@ -90,6 +108,10 @@ export default function Home() {
     setResult(null);
   }
 
+  if (!isUnlocked) {
+    return <PasswordGate onUnlock={handleUnlock} />;
+  }
+
   return (
     <main className="page-shell">
       <section className="app-header">
@@ -97,15 +119,21 @@ export default function Home() {
           <p className="eyebrow">Clover Tip Distribution</p>
           <h1>Weekly tip payout</h1>
         </div>
-        <button
-          className="primary-button compact"
-          type="button"
-          disabled={!result || hasErrors}
-          onClick={() => result && exportTipWorkbook(result)}
-        >
-          <Download aria-hidden="true" size={18} />
-          Export Excel
-        </button>
+        <div className="header-actions">
+          <button className="secondary-button compact" type="button" onClick={handleLock}>
+            <LockKeyhole aria-hidden="true" size={17} />
+            Lock
+          </button>
+          <button
+            className="primary-button compact"
+            type="button"
+            disabled={!result || hasErrors}
+            onClick={() => result && exportTipWorkbook(result)}
+          >
+            <Download aria-hidden="true" size={18} />
+            Export Excel
+          </button>
+        </div>
       </section>
 
       <section className="upload-grid" aria-label="Report uploads">
@@ -156,6 +184,72 @@ export default function Home() {
           uploadsReady={uploadsReady}
         />
       )}
+    </main>
+  );
+}
+
+function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isChecking, setIsChecking] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setIsChecking(true);
+
+    try {
+      const response = await fetch("/api/unlock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ password })
+      });
+      const data = (await response.json()) as { ok?: boolean; message?: string };
+
+      if (!response.ok || !data.ok) {
+        setError(data.message || "Password is incorrect.");
+        return;
+      }
+
+      onUnlock();
+    } catch {
+      setError("Unable to verify the password. Try again.");
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
+  return (
+    <main className="access-shell">
+      <section className="password-card" aria-label="Password required">
+        <span className="access-icon">
+          <ShieldCheck aria-hidden="true" size={24} />
+        </span>
+        <div>
+          <p className="eyebrow">Fair Tips</p>
+          <h1>Manager access</h1>
+          <p className="access-copy">
+            Enter the app password to open the tip distribution dashboard.
+          </p>
+        </div>
+        <form className="password-form" onSubmit={handleSubmit}>
+          <label htmlFor="app-password">Password</label>
+          <input
+            id="app-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Enter password"
+          />
+          {error ? <p className="form-error">{error}</p> : null}
+          <button className="primary-button" type="submit" disabled={!password || isChecking}>
+            {isChecking ? "Checking..." : "Unlock dashboard"}
+          </button>
+        </form>
+      </section>
     </main>
   );
 }
