@@ -10,6 +10,8 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 - Upload Clover timesheet report
 - Validate report structure before calculating
 - Split each order tip across clocked-in staff
+- Separate event/kiosk sales marked as `CLOVERGO`
+- Show event sales and event tips as dashboard metrics
 - Show employee payout summary
 - Flag unallocated tips for manager review
 - Collapse non-blocking validation warnings
@@ -18,12 +20,14 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 
 ## Business Rules
 
-- Sales report must include `Order Date`, `Order ID`, and `Tip`.
+- Sales report must include `Order Date`, `Order ID`, `Order Number`, `Tip`, and `Order Total`.
 - Timesheet report must include `Name`, `Clock in date`, `Clock in time`, `Clock out date`, and `Clock out time`.
 - A valid shift requires an employee name, clock-in time, clock-out time, and `clock-out >= clock-in`.
 - Paid hours come from `Total paid hours` when available. Otherwise they are calculated from clock-in and clock-out.
-- Each order tip is split evenly between employees clocked in at the order date/time.
-- Tips with no active employee are marked as unallocated for manager review.
+- Rows where `Order Number` equals `CLOVERGO` are event/kiosk sales and are not mixed into the store tip pool.
+- Event sales are totaled from `Order Total`, and event tips are totaled from `Tip`.
+- Store order tips are split evenly between employees clocked in at the order date/time.
+- Store tips with no active employee are marked as unallocated for manager review.
 - Overlapping shifts for the same employee are counted once per order.
 
 More detail is documented in [BUSINESS_RULES.md](./BUSINESS_RULES.md).
@@ -42,6 +46,18 @@ Install dependencies:
 
 ```bash
 npm install
+```
+
+Create a local environment file:
+
+```bash
+cp .env.example .env.local
+```
+
+Set the temporary app password:
+
+```text
+FAIR_TIPS_PASSWORD=your-manager-password
 ```
 
 Run the development server:
@@ -97,6 +113,7 @@ Included:
 - Validation
 - Excel export
 - Responsive manager UI
+- Lightweight password screen
 
 Not included yet:
 

@@ -341,9 +341,11 @@ function EmptyState({
 
 function MetricStrip({ result }: { result: CalculationResult }) {
   const metrics = [
-    ["Total tips", formatCurrency(result.metrics.totalTips), "primary"],
+    ["Store tips", formatCurrency(result.metrics.totalTips), "primary"],
     ["Allocated", formatCurrency(result.metrics.allocatedTips), "success"],
     ["Unallocated", formatCurrency(result.metrics.unallocatedTips), "attention"],
+    ["Event sales", formatCurrency(result.metrics.eventSales), "event"],
+    ["Event tips", formatCurrency(result.metrics.eventTips), "event"],
     ["Tipped orders", String(result.metrics.ordersWithTips), "neutral"],
     ["Employees", String(result.metrics.employeesFound), "neutral"]
   ];
@@ -365,7 +367,7 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
     return (
       <section className="notice-panel">
         <AlertTriangle aria-hidden="true" size={18} />
-        <span>No tipped orders were found in the sales report.</span>
+        <span>No tipped store orders were found in the sales report.</span>
       </section>
     );
   }

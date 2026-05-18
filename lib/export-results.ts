@@ -7,14 +7,17 @@ export function exportTipWorkbook(result: CalculationResult) {
 
   const summaryRows = [
     ["Metric", "Value"],
-    ["Total Tips In Sales Report", roundMoney(result.metrics.totalTips)],
+    ["Store Tips", roundMoney(result.metrics.totalTips)],
     ["Allocated Tips", roundMoney(result.metrics.allocatedTips)],
     ["Unallocated Tips", roundMoney(result.metrics.unallocatedTips)],
-    ["Orders With Tips", result.metrics.ordersWithTips],
+    ["Store Orders With Tips", result.metrics.ordersWithTips],
     [
-      "Orders With Tips And No Active Employee",
+      "Store Orders With Tips And No Active Employee",
       result.metrics.ordersWithTipsAndNoActiveEmployee
     ],
+    ["Event Sales", roundMoney(result.metrics.eventSales)],
+    ["Event Tips", roundMoney(result.metrics.eventTips)],
+    ["Event Orders", result.metrics.eventOrders],
     ["Total Paid Hours", roundMoney(result.metrics.totalPaidHours)],
     ["Employees Found", result.metrics.employeesFound],
     [],
@@ -62,6 +65,31 @@ export function exportTipWorkbook(result: CalculationResult) {
     ])
   ];
 
+  const eventRows = [
+    [
+      "Order Date/Time",
+      "Order ID",
+      "Order Number",
+      "Order Total",
+      "Tip",
+      "Payment State",
+      "Tender",
+      "Raw Row"
+    ],
+    ...result.salesOrders
+      .filter((order) => order.isEvent)
+      .map((order) => [
+        formatDateTime(order.orderDate),
+        order.orderId,
+        order.orderNumber,
+        roundMoney(order.orderTotal),
+        roundMoney(order.tip),
+        order.paymentState,
+        order.tender,
+        order.rowNumber
+      ])
+  ];
+
   const shiftRows = [
     ["Employee", "Clock In", "Clock Out", "Paid Hours", "Valid Shift?", "Raw Row"],
     ...result.shifts.map((shift) => [
@@ -91,6 +119,7 @@ export function exportTipWorkbook(result: CalculationResult) {
     XLSX.utils.aoa_to_sheet(detailRows),
     "Tip Allocation Detail"
   );
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(eventRows), "Event Sales");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(shiftRows), "Shift Calc");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(issueRows), "Validation");
 

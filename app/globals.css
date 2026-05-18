@@ -351,7 +351,7 @@ h2 {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -374,6 +374,11 @@ h2 {
 
 .metric-tile[data-tone="attention"] {
   border-top-color: var(--warning);
+}
+
+.metric-tile[data-tone="event"] {
+  border-top-color: var(--accent-dark);
+  background: #fbfdfb;
 }
 
 .metric-tile strong {

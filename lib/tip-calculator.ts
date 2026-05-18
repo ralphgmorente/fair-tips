@@ -16,10 +16,13 @@ export type SalesOrder = {
   rowNumber: number;
   orderDate: Date | null;
   orderId: string;
+  orderNumber: string;
+  orderTotal: number;
   tip: number;
   paymentState: string;
   tender: string;
   rawDate: string;
+  isEvent: boolean;
 };
 
 export type Shift = {
@@ -62,6 +65,9 @@ export type SummaryMetrics = {
   ordersWithTipsAndNoActiveEmployee: number;
   totalPaidHours: number;
   employeesFound: number;
+  eventSales: number;
+  eventTips: number;
+  eventOrders: number;
 };
 
 export type CalculationResult = {
@@ -73,7 +79,8 @@ export type CalculationResult = {
   issues: ValidationIssue[];
 };
 
-const SALES_REQUIRED = ["Order Date", "Order ID", "Tip"];
+const EVENT_ORDER_NUMBER = "CLOVERGO";
+const SALES_REQUIRED = ["Order Date", "Order ID", "Order Number", "Tip", "Order Total"];
 const TIMESHEET_REQUIRED = [
   "Name",
   "Clock in date",
@@ -186,7 +193,10 @@ export function calculateTipDistribution(
     return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues);
   }
 
-  const allocationDetails = parsedSales.orders.map((order) => {
+  const storeOrders = parsedSales.orders.filter((order) => !order.isEvent);
+  const eventOrders = parsedSales.orders.filter((order) => order.isEvent);
+
+  const allocationDetails = storeOrders.map((order) => {
     const activeEmployees = order.orderDate
       ? uniqueActiveEmployees(order.orderDate, validShifts)
       : [];
@@ -219,7 +229,7 @@ export function calculateTipDistribution(
     };
   });
 
-  parsedSales.orders.forEach((order) => {
+  storeOrders.forEach((order) => {
     if (order.tip > 0 && !order.orderDate) {
       issues.push({
         severity: "warning",
@@ -231,7 +241,7 @@ export function calculateTipDistribution(
     }
   });
 
-  const totalTips = sumBy(parsedSales.orders, (order) => order.tip);
+  const totalTips = sumBy(storeOrders, (order) => order.tip);
   const unallocatedTips = sumBy(
     allocationDetails.filter((detail) => detail.activeStaff === 0),
     (detail) => detail.tip
@@ -248,12 +258,15 @@ export function calculateTipDistribution(
     totalTips,
     allocatedTips,
     unallocatedTips,
-    ordersWithTips: parsedSales.orders.filter((order) => order.tip > 0).length,
+    ordersWithTips: storeOrders.filter((order) => order.tip > 0).length,
     ordersWithTipsAndNoActiveEmployee: allocationDetails.filter(
       (detail) => detail.tip > 0 && detail.activeStaff === 0
     ).length,
     totalPaidHours: sumBy(employees, (employee) => employee.paidHours),
-    employeesFound: employees.length
+    employeesFound: employees.length,
+    eventSales: sumBy(eventOrders, (order) => order.orderTotal),
+    eventTips: sumBy(eventOrders, (order) => order.tip),
+    eventOrders: eventOrders.length
   };
 
   if (parsedSales.orders.some((order) => order.paymentState && order.paymentState.toLowerCase() !== "paid")) {
@@ -293,7 +306,9 @@ export function parseSalesReport(grid: Grid): ParsedSales {
 
   const orderDateIndex = header.lookup[normalizeHeader("Order Date")] as number;
   const orderIdIndex = header.lookup[normalizeHeader("Order ID")] as number;
+  const orderNumberIndex = header.lookup[normalizeHeader("Order Number")] as number;
   const tipIndex = header.lookup[normalizeHeader("Tip")] as number;
+  const orderTotalIndex = header.lookup[normalizeHeader("Order Total")] as number;
   const paymentStateIndex = header.lookup[normalizeHeader("Order Payment State")];
   const tenderIndex = header.lookup[normalizeHeader("Tender")];
   const orders: SalesOrder[] = [];
@@ -307,7 +322,9 @@ export function parseSalesReport(grid: Grid): ParsedSales {
 
     const rawDate = cellText(row[orderDateIndex]);
     const orderId = cellText(row[orderIdIndex]);
+    const orderNumber = cellText(row[orderNumberIndex]);
     const tipCell = row[tipIndex];
+    const orderTotalCell = row[orderTotalIndex];
     const tipText = cellText(tipCell);
 
     if (!rawDate && !orderId && !tipText) {
@@ -322,6 +339,18 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         row: rowNumber,
         field: "Tip",
         message: "Tip must be a number."
+      });
+      return;
+    }
+
+    const parsedOrderTotal = parseMoney(orderTotalCell);
+    if (!parsedOrderTotal.valid) {
+      issues.push({
+        severity: "error",
+        source: "sales",
+        row: rowNumber,
+        field: "Order Total",
+        message: "Order Total must be a number."
       });
       return;
     }
@@ -352,10 +381,13 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       rowNumber,
       orderDate: parseOrderDate(rawDate),
       orderId,
+      orderNumber,
+      orderTotal: parsedOrderTotal.value,
       tip: parsedTip.value,
       paymentState: paymentStateIndex === undefined ? "" : cellText(row[paymentStateIndex]),
       tender: tenderIndex === undefined ? "" : cellText(row[tenderIndex]),
-      rawDate
+      rawDate,
+      isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER
     });
   });
 
@@ -494,7 +526,10 @@ function emptyResult(
       ordersWithTips: 0,
       ordersWithTipsAndNoActiveEmployee: 0,
       totalPaidHours: 0,
-      employeesFound: 0
+      employeesFound: 0,
+      eventSales: 0,
+      eventTips: 0,
+      eventOrders: 0
     },
     employees: [],
     allocationDetails: [],
@@ -534,6 +569,10 @@ function normalizeHeader(value: string): string {
 
 function normalizeName(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeEventOrderNumber(value: string): string {
+  return value.trim().replace(/\s+/g, "").toUpperCase();
 }
 
 function cellText(value: CellValue): string {
