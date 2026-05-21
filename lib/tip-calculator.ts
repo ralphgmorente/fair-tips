@@ -3,6 +3,7 @@ export type Grid = CellValue[][];
 
 export type IssueSeverity = "error" | "warning";
 export type IssueSource = "sales" | "timesheet" | "calculation";
+export type TipPool = "store" | "event";
 
 export type ValidationIssue = {
   severity: IssueSeverity;
@@ -28,6 +29,8 @@ export type SalesOrder = {
 export type Shift = {
   rowNumber: number;
   employee: string;
+  role: string;
+  isEventRole: boolean;
   clockIn: Date | null;
   clockOut: Date | null;
   paidHours: number;
@@ -35,9 +38,12 @@ export type Shift = {
 };
 
 export type AllocationDetail = {
+  pool: TipPool;
   rowNumber: number;
   orderDate: Date | null;
   orderId: string;
+  orderNumber: string;
+  orderTotal: number;
   tip: number;
   activeEmployees: string[];
   activeStaff: number;
@@ -51,6 +57,10 @@ export type AllocationDetail = {
 export type EmployeeSummary = {
   employee: string;
   paidHours: number;
+  storeHours: number;
+  eventHours: number;
+  storeTipShare: number;
+  eventTipShare: number;
   tipShare: number;
   sharePercent: number;
   review: string;
@@ -67,7 +77,13 @@ export type SummaryMetrics = {
   employeesFound: number;
   eventSales: number;
   eventTips: number;
+  eventAllocatedTips: number;
+  eventUnallocatedTips: number;
   eventOrders: number;
+  eventOrdersWithTips: number;
+  eventOrdersWithTipsAndNoActiveEmployee: number;
+  totalAllocatedTips: number;
+  totalUnallocatedTips: number;
 };
 
 export type CalculationResult = {
@@ -80,6 +96,7 @@ export type CalculationResult = {
 };
 
 const EVENT_ORDER_NUMBER = "CLOVERGO";
+const EVENT_ROLE = "evento";
 const SALES_REQUIRED = ["Order Date", "Order ID", "Order Number", "Tip", "Order Total"];
 const TIMESHEET_REQUIRED = [
   "Name",
@@ -90,7 +107,7 @@ const TIMESHEET_REQUIRED = [
 ];
 
 const OPTIONAL_SALES = ["Order Payment State", "Tender"];
-const OPTIONAL_TIMESHEET = ["Total paid hours"];
+const OPTIONAL_TIMESHEET = ["Total paid hours", "Role"];
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -129,6 +146,7 @@ type ParsedSales = {
 type ParsedTimesheet = {
   shifts: Shift[];
   issues: ValidationIssue[];
+  hasRoleColumn: boolean;
 };
 
 export function calculateTipDistribution(
@@ -149,6 +167,11 @@ export function calculateTipDistribution(
     const current = employeeOrder.get(key);
     if (current) {
       current.paidHours += shift.paidHours;
+      if (shift.isEventRole) {
+        current.eventHours += shift.paidHours;
+      } else {
+        current.storeHours += shift.paidHours;
+      }
       current.shiftCount += 1;
       return;
     }
@@ -156,6 +179,10 @@ export function calculateTipDistribution(
     employeeOrder.set(key, {
       employee: shift.employee,
       paidHours: shift.paidHours,
+      storeHours: shift.isEventRole ? 0 : shift.paidHours,
+      eventHours: shift.isEventRole ? shift.paidHours : 0,
+      storeTipShare: 0,
+      eventTipShare: 0,
       tipShare: 0,
       sharePercent: 0,
       review: "",
@@ -195,62 +222,50 @@ export function calculateTipDistribution(
 
   const storeOrders = parsedSales.orders.filter((order) => !order.isEvent);
   const eventOrders = parsedSales.orders.filter((order) => order.isEvent);
+  const storeAllocationDetails = allocateOrders(
+    storeOrders,
+    "store",
+    validShifts,
+    employeeOrder
+  );
+  const eventAllocationDetails = allocateOrders(
+    eventOrders,
+    "event",
+    validShifts,
+    employeeOrder
+  );
+  const allocationDetails = [...storeAllocationDetails, ...eventAllocationDetails];
 
-  const allocationDetails = storeOrders.map((order) => {
-    const activeEmployees = order.orderDate
-      ? uniqueActiveEmployees(order.orderDate, validShifts)
-      : [];
-    const activeStaff = activeEmployees.length;
-    const tipPerPerson = activeStaff === 0 ? 0 : order.tip / activeStaff;
-
-    activeEmployees.forEach((employee) => {
-      const summary = employeeOrder.get(normalizeName(employee));
-      if (summary) {
-        summary.tipShare += tipPerPerson;
-      }
-    });
-
-    return {
-      rowNumber: order.rowNumber,
-      orderDate: order.orderDate,
-      orderId: order.orderId,
-      tip: order.tip,
-      activeEmployees,
-      activeStaff,
-      tipPerPerson,
-      allocatedTip: activeStaff === 0 ? 0 : order.tip,
-      paymentState: order.paymentState,
-      tender: order.tender,
-      status: order.orderDate
-        ? activeStaff === 0
-          ? "NO ACTIVE EMPLOYEE"
-          : `${activeStaff} active`
-        : "NO VALID ORDER TIME"
-    };
-  });
-
-  storeOrders.forEach((order) => {
-    if (order.tip > 0 && !order.orderDate) {
+  allocationDetails.forEach((detail) => {
+    if (detail.tip > 0 && !detail.orderDate) {
       issues.push({
         severity: "warning",
         source: "sales",
-        row: order.rowNumber,
+        row: detail.rowNumber,
         field: "Order Date",
-        message: "A tipped order has a date/time that could not be parsed, so it is unallocated."
+        message: `A tipped ${detail.pool} order has a date/time that could not be parsed, so it is unallocated.`
       });
     }
   });
 
   const totalTips = sumBy(storeOrders, (order) => order.tip);
   const unallocatedTips = sumBy(
-    allocationDetails.filter((detail) => detail.activeStaff === 0),
+    storeAllocationDetails.filter((detail) => detail.activeStaff === 0),
     (detail) => detail.tip
   );
   const allocatedTips = totalTips - unallocatedTips;
+  const eventTips = sumBy(eventOrders, (order) => order.tip);
+  const eventUnallocatedTips = sumBy(
+    eventAllocationDetails.filter((detail) => detail.activeStaff === 0),
+    (detail) => detail.tip
+  );
+  const eventAllocatedTips = eventTips - eventUnallocatedTips;
+  const totalAllocatedTips = allocatedTips + eventAllocatedTips;
+  const totalUnallocatedTips = unallocatedTips + eventUnallocatedTips;
 
   const employees = [...employeeOrder.values()].map((employee) => ({
     ...employee,
-    sharePercent: allocatedTips === 0 ? 0 : employee.tipShare / allocatedTips,
+    sharePercent: totalAllocatedTips === 0 ? 0 : employee.tipShare / totalAllocatedTips,
     review: employee.tipShare === 0 ? "No matching tipped orders" : ""
   }));
 
@@ -259,15 +274,40 @@ export function calculateTipDistribution(
     allocatedTips,
     unallocatedTips,
     ordersWithTips: storeOrders.filter((order) => order.tip > 0).length,
-    ordersWithTipsAndNoActiveEmployee: allocationDetails.filter(
+    ordersWithTipsAndNoActiveEmployee: storeAllocationDetails.filter(
       (detail) => detail.tip > 0 && detail.activeStaff === 0
     ).length,
     totalPaidHours: sumBy(employees, (employee) => employee.paidHours),
     employeesFound: employees.length,
     eventSales: sumBy(eventOrders, (order) => order.orderTotal),
-    eventTips: sumBy(eventOrders, (order) => order.tip),
-    eventOrders: eventOrders.length
+    eventTips,
+    eventAllocatedTips,
+    eventUnallocatedTips,
+    eventOrders: eventOrders.length,
+    eventOrdersWithTips: eventOrders.filter((order) => order.tip > 0).length,
+    eventOrdersWithTipsAndNoActiveEmployee: eventAllocationDetails.filter(
+      (detail) => detail.tip > 0 && detail.activeStaff === 0
+    ).length,
+    totalAllocatedTips,
+    totalUnallocatedTips
   };
+
+  if (metrics.eventOrdersWithTips > 0 && !parsedTimesheet.hasRoleColumn) {
+    issues.push({
+      severity: "warning",
+      source: "timesheet",
+      field: "Role",
+      message: "The timesheet has no Role column, so event tips cannot be matched to Evento shifts."
+    });
+  }
+
+  if (metrics.eventOrdersWithTips > 0 && metrics.eventAllocatedTips === 0) {
+    issues.push({
+      severity: "warning",
+      source: "calculation",
+      message: "Event tips were found, but no active Evento shifts matched those event order times."
+    });
+  }
 
   if (parsedSales.orders.some((order) => order.paymentState && order.paymentState.toLowerCase() !== "paid")) {
     issues.push({
@@ -401,6 +441,7 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
   if (!header) {
     return {
       shifts: [],
+      hasRoleColumn: false,
       issues: [
         {
           severity: "error",
@@ -417,6 +458,7 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
   const clockOutDateIndex = header.lookup[normalizeHeader("Clock out date")] as number;
   const clockOutTimeIndex = header.lookup[normalizeHeader("Clock out time")] as number;
   const totalPaidHoursIndex = header.lookup[normalizeHeader("Total paid hours")];
+  const roleIndex = header.lookup[normalizeHeader("Role")];
   const shifts: Shift[] = [];
 
   grid.slice(header.rowIndex + 1).forEach((row, offset) => {
@@ -430,6 +472,7 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
       return;
     }
 
+    const role = roleIndex === undefined ? "" : cellText(row[roleIndex]);
     const clockIn = parseShiftDateTime(row[clockInDateIndex], row[clockInTimeIndex]);
     const clockOut = parseShiftDateTime(row[clockOutDateIndex], row[clockOutTimeIndex]);
     const paidHoursFromReport =
@@ -463,6 +506,8 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
     shifts.push({
       rowNumber,
       employee,
+      role,
+      isEventRole: isEventRole(role),
       clockIn,
       clockOut,
       paidHours: Math.max(0, paidHours),
@@ -470,7 +515,7 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
     });
   });
 
-  return { shifts, issues };
+  return { shifts, issues, hasRoleColumn: roleIndex !== undefined };
 }
 
 export function formatDateTime(value: Date | null): string {
@@ -529,7 +574,13 @@ function emptyResult(
       employeesFound: 0,
       eventSales: 0,
       eventTips: 0,
-      eventOrders: 0
+      eventAllocatedTips: 0,
+      eventUnallocatedTips: 0,
+      eventOrders: 0,
+      eventOrdersWithTips: 0,
+      eventOrdersWithTipsAndNoActiveEmployee: 0,
+      totalAllocatedTips: 0,
+      totalUnallocatedTips: 0
     },
     employees: [],
     allocationDetails: [],
@@ -573,6 +624,19 @@ function normalizeName(value: string): string {
 
 function normalizeEventOrderNumber(value: string): string {
   return value.trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function normalizeRole(value: string): string {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function isEventRole(role: string): boolean {
+  return normalizeRole(role) === EVENT_ROLE;
 }
 
 function cellText(value: CellValue): string {
@@ -824,6 +888,72 @@ function diffHours(start: Date, end: Date): number {
   return (end.getTime() - start.getTime()) / 36e5;
 }
 
+function allocateOrders(
+  orders: SalesOrder[],
+  pool: TipPool,
+  validShifts: Shift[],
+  employeeOrder: Map<string, EmployeeSummary>
+): AllocationDetail[] {
+  const shiftsForPool = validShifts.filter((shift) =>
+    pool === "event" ? shift.isEventRole : !shift.isEventRole
+  );
+
+  return orders.map((order) => {
+    const activeEmployees = order.orderDate
+      ? uniqueActiveEmployees(order.orderDate, shiftsForPool)
+      : [];
+    const activeStaff = activeEmployees.length;
+    const tipPerPerson = activeStaff === 0 ? 0 : order.tip / activeStaff;
+
+    activeEmployees.forEach((employee) => {
+      const summary = employeeOrder.get(normalizeName(employee));
+      if (!summary) {
+        return;
+      }
+
+      if (pool === "event") {
+        summary.eventTipShare += tipPerPerson;
+      } else {
+        summary.storeTipShare += tipPerPerson;
+      }
+      summary.tipShare += tipPerPerson;
+    });
+
+    return {
+      pool,
+      rowNumber: order.rowNumber,
+      orderDate: order.orderDate,
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      orderTotal: order.orderTotal,
+      tip: order.tip,
+      activeEmployees,
+      activeStaff,
+      tipPerPerson,
+      allocatedTip: activeStaff === 0 ? 0 : order.tip,
+      paymentState: order.paymentState,
+      tender: order.tender,
+      status: formatAllocationStatus(pool, order.orderDate, activeStaff)
+    };
+  });
+}
+
+function formatAllocationStatus(
+  pool: TipPool,
+  orderDate: Date | null,
+  activeStaff: number
+): string {
+  if (!orderDate) {
+    return "NO VALID ORDER TIME";
+  }
+
+  if (activeStaff === 0) {
+    return pool === "event" ? "NO ACTIVE EVENT EMPLOYEE" : "NO ACTIVE STORE EMPLOYEE";
+  }
+
+  return `${activeStaff} active ${pool}`;
+}
+
 function uniqueActiveEmployees(orderDate: Date, validShifts: Shift[]): string[] {
   const active = new Map<string, string>();
   validShifts.forEach((shift) => {
@@ -878,6 +1008,7 @@ function isSkippedTimesheetName(name: string): boolean {
     normalized === "" ||
     normalized === "-" ||
     normalized === "name" ||
+    normalized === "totals" ||
     normalized.startsWith("totals for")
   );
 }

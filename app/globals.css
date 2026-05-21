@@ -511,7 +511,7 @@ h2 {
 
 table {
   width: 100%;
-  min-width: 760px;
+  min-width: 980px;
   border-collapse: separate;
   border-spacing: 0;
   background: var(--surface);

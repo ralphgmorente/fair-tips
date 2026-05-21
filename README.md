@@ -11,7 +11,8 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 - Validate report structure before calculating
 - Split each order tip across clocked-in staff
 - Separate event/kiosk sales marked as `CLOVERGO`
-- Show event sales and event tips as dashboard metrics
+- Use the timesheet `Role` value `Evento` to split event tips only across event staff
+- Show store tips, event tips, and total payout in the employee summary
 - Show employee payout summary
 - Flag unallocated tips for manager review
 - Collapse non-blocking validation warnings
@@ -25,9 +26,10 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 - A valid shift requires an employee name, clock-in time, clock-out time, and `clock-out >= clock-in`.
 - Paid hours come from `Total paid hours` when available. Otherwise they are calculated from clock-in and clock-out.
 - Rows where `Order Number` equals `CLOVERGO` are event/kiosk sales and are not mixed into the store tip pool.
-- Event sales are totaled from `Order Total`, and event tips are totaled from `Tip`.
-- Store order tips are split evenly between employees clocked in at the order date/time.
-- Store tips with no active employee are marked as unallocated for manager review.
+- Timesheet rows where `Role` equals `Evento` are treated as event shifts. Blank or other roles are treated as store shifts.
+- Event sales are totaled from `Order Total`, and event tips are split evenly between active `Evento` employees at the event order time.
+- Store order tips are split evenly between active non-event employees at the order date/time.
+- Store or event tips with no active employee in that pool are marked as unallocated for manager review.
 - Overlapping shifts for the same employee are counted once per order.
 
 More detail is documented in [BUSINESS_RULES.md](./BUSINESS_RULES.md).

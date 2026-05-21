@@ -341,12 +341,14 @@ function EmptyState({
 
 function MetricStrip({ result }: { result: CalculationResult }) {
   const metrics = [
-    ["Store tips", formatCurrency(result.metrics.totalTips), "primary"],
-    ["Allocated", formatCurrency(result.metrics.allocatedTips), "success"],
-    ["Unallocated", formatCurrency(result.metrics.unallocatedTips), "attention"],
+    ["Total payout", formatCurrency(result.metrics.totalAllocatedTips), "success"],
+    ["Store allocated", formatCurrency(result.metrics.allocatedTips), "primary"],
+    ["Event allocated", formatCurrency(result.metrics.eventAllocatedTips), "event"],
+    ["Unallocated", formatCurrency(result.metrics.totalUnallocatedTips), "attention"],
     ["Event sales", formatCurrency(result.metrics.eventSales), "event"],
     ["Event tips", formatCurrency(result.metrics.eventTips), "event"],
-    ["Tipped orders", String(result.metrics.ordersWithTips), "neutral"],
+    ["Store orders", String(result.metrics.ordersWithTips), "neutral"],
+    ["Event orders", String(result.metrics.eventOrdersWithTips), "neutral"],
     ["Employees", String(result.metrics.employeesFound), "neutral"]
   ];
 
@@ -363,29 +365,31 @@ function MetricStrip({ result }: { result: CalculationResult }) {
 }
 
 function EdgeCasePanel({ result }: { result: CalculationResult }) {
-  if (result.metrics.totalTips === 0) {
+  const totalTips = result.metrics.totalTips + result.metrics.eventTips;
+
+  if (totalTips === 0) {
     return (
       <section className="notice-panel">
         <AlertTriangle aria-hidden="true" size={18} />
-        <span>No tipped store orders were found in the sales report.</span>
+        <span>No tipped store or event orders were found in the sales report.</span>
       </section>
     );
   }
 
-  if (result.metrics.allocatedTips === 0) {
+  if (result.metrics.totalAllocatedTips === 0) {
     return (
       <section className="notice-panel">
         <AlertTriangle aria-hidden="true" size={18} />
-        <span>Tips were found, but no tipped orders matched active shifts.</span>
+        <span>Tips were found, but no tipped orders matched active shifts by role.</span>
       </section>
     );
   }
 
-  if (result.metrics.unallocatedTips === 0) {
+  if (result.metrics.totalUnallocatedTips === 0) {
     return (
       <section className="notice-panel success">
         <CheckCircle2 aria-hidden="true" size={18} />
-        <span>All tipped orders matched active shifts.</span>
+        <span>All tipped orders matched active shifts by role.</span>
       </section>
     );
   }
@@ -394,21 +398,29 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
     <section className="notice-panel warning">
       <AlertTriangle aria-hidden="true" size={18} />
       <span>
-        {formatCurrency(result.metrics.unallocatedTips)} needs manager review before payout.
+        {formatCurrency(result.metrics.totalUnallocatedTips)} needs manager review before payout.
       </span>
     </section>
   );
 }
 
 function EmployeeTable({ result }: { result: CalculationResult }) {
-  const totalSharePercent = result.metrics.allocatedTips > 0 ? 1 : 0;
+  const totalSharePercent = result.metrics.totalAllocatedTips > 0 ? 1 : 0;
+  const totalStoreHours = result.employees.reduce(
+    (total, employee) => total + employee.storeHours,
+    0
+  );
+  const totalEventHours = result.employees.reduce(
+    (total, employee) => total + employee.eventHours,
+    0
+  );
 
   return (
     <section className="table-panel">
       <div className="section-heading">
         <h2>Employee summary</h2>
         <span>
-          {formatCurrency(result.metrics.allocatedTips)} allocated across{" "}
+          {formatCurrency(result.metrics.totalAllocatedTips)} allocated across{" "}
           {result.metrics.employeesFound} employees
         </span>
       </div>
@@ -417,8 +429,12 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           <thead>
             <tr>
               <th>Employee</th>
-              <th>Weekly paid hours</th>
-              <th>Tip share</th>
+              <th>Store hours</th>
+              <th>Event hours</th>
+              <th>Total hours</th>
+              <th>Store tips</th>
+              <th>Event tips</th>
+              <th>Total tips</th>
               <th>Share %</th>
               <th>Review</th>
             </tr>
@@ -426,7 +442,7 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           <tbody>
             {result.employees.length === 0 ? (
               <tr>
-                <td className="table-empty" colSpan={5}>
+                <td className="table-empty" colSpan={9}>
                   No employees were found in the timesheet report.
                 </td>
               </tr>
@@ -436,10 +452,22 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
                   <td data-label="Employee">
                     <strong>{employee.employee}</strong>
                   </td>
-                  <td data-label="Weekly paid hours" className="numeric">
+                  <td data-label="Store hours" className="numeric">
+                    {formatNumber(employee.storeHours)}
+                  </td>
+                  <td data-label="Event hours" className="numeric">
+                    {formatNumber(employee.eventHours)}
+                  </td>
+                  <td data-label="Total hours" className="numeric">
                     {formatNumber(employee.paidHours)}
                   </td>
-                  <td data-label="Tip share" className="numeric payout">
+                  <td data-label="Store tips" className="numeric payout">
+                    {formatCurrency(employee.storeTipShare)}
+                  </td>
+                  <td data-label="Event tips" className="numeric payout">
+                    {formatCurrency(employee.eventTipShare)}
+                  </td>
+                  <td data-label="Total tips" className="numeric payout">
                     {formatCurrency(employee.tipShare)}
                   </td>
                   <td data-label="Share %" className="numeric">
@@ -457,11 +485,23 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           <tfoot>
             <tr>
               <td data-label="Employee">Total</td>
-              <td data-label="Weekly paid hours" className="numeric">
+              <td data-label="Store hours" className="numeric">
+                {formatNumber(totalStoreHours)}
+              </td>
+              <td data-label="Event hours" className="numeric">
+                {formatNumber(totalEventHours)}
+              </td>
+              <td data-label="Total hours" className="numeric">
                 {formatNumber(result.metrics.totalPaidHours)}
               </td>
-              <td data-label="Tip share" className="numeric payout">
+              <td data-label="Store tips" className="numeric payout">
                 {formatCurrency(result.metrics.allocatedTips)}
+              </td>
+              <td data-label="Event tips" className="numeric payout">
+                {formatCurrency(result.metrics.eventAllocatedTips)}
+              </td>
+              <td data-label="Total tips" className="numeric payout">
+                {formatCurrency(result.metrics.totalAllocatedTips)}
               </td>
               <td data-label="Share %" className="numeric">
                 {formatPercent(totalSharePercent)}
@@ -558,12 +598,13 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
     <section className="table-panel">
       <div className="section-heading">
         <h2>Unallocated orders</h2>
-        <span>{formatCurrency(result.metrics.unallocatedTips)}</span>
+        <span>{formatCurrency(result.metrics.totalUnallocatedTips)}</span>
       </div>
       <div className="table-scroll">
         <table className="detail-table">
           <thead>
             <tr>
+              <th>Pool</th>
               <th>Order time</th>
               <th>Order ID</th>
               <th>Tip</th>
@@ -574,6 +615,7 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
           <tbody>
             {unallocated.slice(0, 25).map((detail) => (
               <tr key={`${detail.orderId}-${detail.rowNumber}`}>
+                <td data-label="Pool">{formatPool(detail.pool)}</td>
                 <td data-label="Order time">
                   {formatDateTime(detail.orderDate) || "Invalid time"}
                 </td>
@@ -597,6 +639,10 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
       ) : null}
     </section>
   );
+}
+
+function formatPool(pool: "store" | "event"): string {
+  return pool === "event" ? "Event" : "Store";
 }
 
 function formatIssue(issue: ValidationIssue): string {
