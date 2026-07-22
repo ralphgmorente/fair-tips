@@ -18,10 +18,19 @@ export type SalesOrder = {
   orderDate: Date | null;
   orderId: string;
   orderNumber: string;
+  grossSales: number;
+  discounts: number;
+  refunds: number;
+  taxes: number;
+  netSales: number;
   orderTotal: number;
+  paymentTotal: number;
   tip: number;
   paymentState: string;
   tender: string;
+  paymentNote: string;
+  orderType: string;
+  note: string;
   rawDate: string;
   isEvent: boolean;
 };
@@ -75,6 +84,14 @@ export type SummaryMetrics = {
   ordersWithTipsAndNoActiveEmployee: number;
   totalPaidHours: number;
   employeesFound: number;
+  netSales: number;
+  laborPercent: number;
+  creditDebitSales: number;
+  cashSales: number;
+  giftCardSales: number;
+  grubhubSales: number;
+  doorDashSales: number;
+  uberEatsSales: number;
   eventSales: number;
   eventTips: number;
   eventAllocatedTips: number;
@@ -106,8 +123,54 @@ const TIMESHEET_REQUIRED = [
   "Clock out time"
 ];
 
-const OPTIONAL_SALES = ["Order Payment State", "Tender"];
+const OPTIONAL_SALES = [
+  "Order Payment State",
+  "Tender",
+  "Gross Sales",
+  "Discount",
+  "Discounts",
+  "Tax Amount",
+  "Refunds Total",
+  "Manual Refunds Total",
+  "Payments Total",
+  "Payment Note",
+  "Order Type",
+  "Note"
+];
 const OPTIONAL_TIMESHEET = ["Total paid hours", "Role"];
+
+const GROSS_SALES_HEADERS = [
+  "Gross Sales",
+  "Gross Sales Total",
+  "Gross Sale",
+  "Gross Amount",
+  "Subtotal",
+  "Subtotal Sales",
+  "Gross Sales Including Tax",
+  "Gross Sales Incl Tax",
+  "Gross Total",
+  "Total Sales"
+];
+const GROSS_SALES_INCLUDES_TAX_HEADERS = [
+  "Gross Sales Including Tax",
+  "Gross Sales Incl Tax",
+  "Gross Total",
+  "Total Sales"
+];
+const DISCOUNT_HEADERS = ["Discount", "Discounts", "Discount Amount", "Discount Total"];
+const REFUND_HEADERS = [
+  "Refunds Total",
+  "Manual Refunds Total",
+  "Refund",
+  "Refunds",
+  "Refund Amount",
+  "Refund Total"
+];
+const TAX_HEADERS = ["Tax Amount", "Tax", "Taxes", "Sales Tax"];
+const PAYMENT_TOTAL_HEADERS = ["Payments Total", "Payment Total", "Amount Paid", "Paid Amount"];
+const PAYMENT_NOTE_HEADERS = ["Payment Note", "Payment Notes"];
+const ORDER_TYPE_HEADERS = ["Order Type"];
+const NOTE_HEADERS = ["Note", "Notes"];
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -268,6 +331,9 @@ export function calculateTipDistribution(
     sharePercent: totalAllocatedTips === 0 ? 0 : employee.tipShare / totalAllocatedTips,
     review: employee.tipShare === 0 ? "No matching tipped orders" : ""
   }));
+  const totalPaidHours = sumBy(employees, (employee) => employee.paidHours);
+  const netSales = sumBy(parsedSales.orders, (order) => order.netSales);
+  const laborPercent = netSales === 0 ? 0 : totalPaidHours / netSales;
 
   const metrics: SummaryMetrics = {
     totalTips,
@@ -277,8 +343,34 @@ export function calculateTipDistribution(
     ordersWithTipsAndNoActiveEmployee: storeAllocationDetails.filter(
       (detail) => detail.tip > 0 && detail.activeStaff === 0
     ).length,
-    totalPaidHours: sumBy(employees, (employee) => employee.paidHours),
+    totalPaidHours,
     employeesFound: employees.length,
+    netSales,
+    laborPercent,
+    creditDebitSales: sumBy(
+      parsedSales.orders.filter((order) => isCreditDebitTender(order)),
+      (order) => order.paymentTotal
+    ),
+    cashSales: sumBy(
+      parsedSales.orders.filter((order) => isCashTender(order)),
+      (order) => order.paymentTotal
+    ),
+    giftCardSales: sumBy(
+      parsedSales.orders.filter((order) => isGiftCardTender(order)),
+      (order) => order.paymentTotal
+    ),
+    grubhubSales: sumBy(
+      parsedSales.orders.filter((order) => deliveryPlatform(order) === "grubhub"),
+      (order) => order.netSales
+    ),
+    doorDashSales: sumBy(
+      parsedSales.orders.filter((order) => deliveryPlatform(order) === "doordash"),
+      (order) => order.netSales
+    ),
+    uberEatsSales: sumBy(
+      parsedSales.orders.filter((order) => deliveryPlatform(order) === "ubereats"),
+      (order) => order.netSales
+    ),
     eventSales: sumBy(eventOrders, (order) => order.orderTotal),
     eventTips,
     eventAllocatedTips,
@@ -349,8 +441,16 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const orderNumberIndex = header.lookup[normalizeHeader("Order Number")] as number;
   const tipIndex = header.lookup[normalizeHeader("Tip")] as number;
   const orderTotalIndex = header.lookup[normalizeHeader("Order Total")] as number;
+  const grossSalesColumn = findColumn(header.lookup, GROSS_SALES_HEADERS);
+  const discountIndexes = findColumns(header.lookup, DISCOUNT_HEADERS);
+  const refundIndexes = findColumns(header.lookup, REFUND_HEADERS);
+  const taxIndexes = findColumns(header.lookup, TAX_HEADERS);
+  const paymentTotalColumn = findColumn(header.lookup, PAYMENT_TOTAL_HEADERS);
   const paymentStateIndex = header.lookup[normalizeHeader("Order Payment State")];
   const tenderIndex = header.lookup[normalizeHeader("Tender")];
+  const paymentNoteIndex = findColumn(header.lookup, PAYMENT_NOTE_HEADERS)?.index;
+  const orderTypeIndex = findColumn(header.lookup, ORDER_TYPE_HEADERS)?.index;
+  const noteIndex = findColumn(header.lookup, NOTE_HEADERS)?.index;
   const orders: SalesOrder[] = [];
   const seenOrderIds = new Set<string>();
 
@@ -395,6 +495,22 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       return;
     }
 
+    const grossSales = grossSalesColumn
+      ? parseOptionalMoney(row[grossSalesColumn.index])
+      : parsedOrderTotal.value;
+    const discounts = sumOptionalDeductions(row, discountIndexes);
+    const refunds = sumOptionalDeductions(row, refundIndexes);
+    const taxes = sumOptionalDeductions(row, taxIndexes);
+    const grossSalesIncludesTaxes =
+      !grossSalesColumn ||
+      GROSS_SALES_INCLUDES_TAX_HEADERS.some(
+        (headerName) => normalizeHeader(headerName) === normalizeHeader(grossSalesColumn.header)
+      );
+    const netSales = grossSales - discounts - refunds - (grossSalesIncludesTaxes ? taxes : 0);
+    const paymentTotal = paymentTotalColumn
+      ? parseOptionalMoney(row[paymentTotalColumn.index])
+      : parsedOrderTotal.value;
+
     if (!orderId) {
       issues.push({
         severity: "warning",
@@ -422,10 +538,19 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       orderDate: parseOrderDate(rawDate),
       orderId,
       orderNumber,
+      grossSales,
+      discounts,
+      refunds,
+      taxes,
+      netSales,
       orderTotal: parsedOrderTotal.value,
+      paymentTotal,
       tip: parsedTip.value,
       paymentState: paymentStateIndex === undefined ? "" : cellText(row[paymentStateIndex]),
       tender: tenderIndex === undefined ? "" : cellText(row[tenderIndex]),
+      paymentNote: paymentNoteIndex === undefined ? "" : cellText(row[paymentNoteIndex]),
+      orderType: orderTypeIndex === undefined ? "" : cellText(row[orderTypeIndex]),
+      note: noteIndex === undefined ? "" : cellText(row[noteIndex]),
       rawDate,
       isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER
     });
@@ -572,6 +697,14 @@ function emptyResult(
       ordersWithTipsAndNoActiveEmployee: 0,
       totalPaidHours: 0,
       employeesFound: 0,
+      netSales: 0,
+      laborPercent: 0,
+      creditDebitSales: 0,
+      cashSales: 0,
+      giftCardSales: 0,
+      grubhubSales: 0,
+      doorDashSales: 0,
+      uberEatsSales: 0,
       eventSales: 0,
       eventTips: 0,
       eventAllocatedTips: 0,
@@ -674,6 +807,101 @@ function parseMoney(value: CellValue, blankIsZero = true): { valid: boolean; val
   }
 
   return { valid: true, value: negativeParentheses ? -parsed : parsed };
+}
+
+function parseOptionalMoney(value: CellValue): number {
+  const parsed = parseMoney(value);
+  return parsed.valid ? parsed.value : 0;
+}
+
+function findColumn(
+  lookup: HeaderLookup,
+  headers: string[]
+): { index: number; header: string } | null {
+  for (const header of headers) {
+    const index = lookup[normalizeHeader(header)];
+    if (index !== undefined) {
+      return { index, header };
+    }
+  }
+
+  return null;
+}
+
+function findColumns(lookup: HeaderLookup, headers: string[]): number[] {
+  const indexes = new Set<number>();
+  headers.forEach((header) => {
+    const index = lookup[normalizeHeader(header)];
+    if (index !== undefined) {
+      indexes.add(index);
+    }
+  });
+
+  return [...indexes];
+}
+
+function sumOptionalDeductions(row: CellValue[], indexes: number[]): number {
+  return indexes.reduce((total, index) => total + Math.abs(parseOptionalMoney(row[index])), 0);
+}
+
+function isCreditDebitTender(order: SalesOrder): boolean {
+  const text = paymentSearchText(order);
+  if (matchesPhrase(text, ["gift card", "giftcard", "house account", "houseaccount"])) {
+    return false;
+  }
+
+  return matchesPhrase(text, ["credit card", "debit card", "credit", "debit"]);
+}
+
+function isCashTender(order: SalesOrder): boolean {
+  return matchesPhrase(paymentSearchText(order), ["cash"]);
+}
+
+function isGiftCardTender(order: SalesOrder): boolean {
+  return matchesPhrase(paymentSearchText(order), ["gift card", "giftcard"]);
+}
+
+function deliveryPlatform(order: SalesOrder): "grubhub" | "doordash" | "ubereats" | null {
+  const text = searchableText(
+    order.tender,
+    order.paymentNote,
+    order.orderType,
+    order.note,
+    order.orderNumber,
+    order.orderId
+  );
+
+  if (matchesPhrase(text, ["grubhub", "grub hub"])) {
+    return "grubhub";
+  }
+
+  if (matchesPhrase(text, ["doordash", "door dash"])) {
+    return "doordash";
+  }
+
+  if (matchesPhrase(text, ["uber eats", "ubereats"])) {
+    return "ubereats";
+  }
+
+  return null;
+}
+
+function matchesPhrase(text: string, phrases: string[]): boolean {
+  return phrases.some((phrase) => text.includes(searchableText(phrase)));
+}
+
+function paymentSearchText(order: SalesOrder): string {
+  return searchableText(order.tender || order.paymentNote);
+}
+
+function searchableText(...values: string[]): string {
+  return values
+    .join(" ")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function parseOrderDate(value: CellValue): Date | null {

@@ -340,6 +340,76 @@ function EmptyState({
 }
 
 function MetricStrip({ result }: { result: CalculationResult }) {
+  const laborPercent =
+    result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
+  const dashboardCards: Array<{
+    title: string;
+    tone: string;
+    rows: Array<{ label: string; value: string; featured?: boolean }>;
+  }> = [
+    {
+      title: "Net Sales & Labor",
+      tone: "primary",
+      rows: [
+        {
+          label: "Net Sales",
+          value: formatCurrency(result.metrics.netSales),
+          featured: true
+        },
+        {
+          label: "Labor",
+          value: `${formatNumber(result.metrics.totalPaidHours)} hrs / ${formatCurrency(
+            result.metrics.netSales
+          )} = ${laborPercent}`
+        }
+      ]
+    },
+    {
+      title: "Credit & Debit Sales",
+      tone: "success",
+      rows: [
+        {
+          label: "Credit & Debit",
+          value: formatCurrency(result.metrics.creditDebitSales),
+          featured: true
+        }
+      ]
+    },
+    {
+      title: "Cash & Gift Cards",
+      tone: "attention",
+      rows: [
+        {
+          label: "Cash",
+          value: formatCurrency(result.metrics.cashSales),
+          featured: true
+        },
+        {
+          label: "Gift Cards",
+          value: formatCurrency(result.metrics.giftCardSales),
+          featured: true
+        }
+      ]
+    },
+    {
+      title: "Delivery Platforms",
+      tone: "event",
+      rows: [
+        {
+          label: "Grubhub",
+          value: formatCurrency(result.metrics.grubhubSales)
+        },
+        {
+          label: "DoorDash",
+          value: formatCurrency(result.metrics.doorDashSales)
+        },
+        {
+          label: "Uber Eats",
+          value: formatCurrency(result.metrics.uberEatsSales)
+        }
+      ]
+    }
+  ];
   const metrics = [
     ["Total payout", formatCurrency(result.metrics.totalAllocatedTips), "success"],
     ["Store allocated", formatCurrency(result.metrics.allocatedTips), "primary"],
@@ -354,6 +424,19 @@ function MetricStrip({ result }: { result: CalculationResult }) {
 
   return (
     <section className="metric-strip" aria-label="Calculation summary">
+      {dashboardCards.map((card) => (
+        <div className="metric-tile metric-tile-stacked" data-tone={card.tone} key={card.title}>
+          <span>{card.title}</span>
+          <div className="metric-lines">
+            {card.rows.map((row) => (
+              <div className={row.featured ? "metric-line featured" : "metric-line"} key={row.label}>
+                <span>{row.label}</span>
+                <strong>{row.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
       {metrics.map(([label, value, tone]) => (
         <div className="metric-tile" data-tone={tone} key={label}>
           <span>{label}</span>
