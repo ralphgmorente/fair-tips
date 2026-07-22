@@ -808,35 +808,4 @@ tfoot td {
   }
 
   .password-card {
-    padding: 22px;
-  }
-
-  .header-actions {
-    flex-direction: column;
-  }
-
-  .header-actions .primary-button,
-  .header-actions .secondary-button {
-    width: 100%;
-  }
-
-  .upload-panel {
-    grid-template-columns: 40px minmax(0, 1fr);
-    min-height: 110px;
-  }
-
-  .upload-status {
-    grid-column: 2;
-    justify-self: start;
-    padding-left: 0;
-  }
-
-  .metric-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .validation-panel,
-  .table-panel {
-    padding: 14px;
-  }
-}
+    padding:
