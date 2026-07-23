@@ -358,9 +358,7 @@ function MetricStrip({ result }: { result: CalculationResult }) {
         },
         {
           label: "Labor",
-          value: `${formatNumber(result.metrics.totalPaidHours)} hrs / ${formatCurrency(
-            result.metrics.totalLaborCost
-          )} = ${laborPercent}`
+          value: laborPercent
         }
       ]
     },
