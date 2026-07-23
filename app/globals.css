@@ -260,7 +260,7 @@ h2 {
 }
 
 .upload-status {
-  justify-self: end;
+  justify-self: flex-end;
   padding-left: 10px;
   color: var(--info);
   font-weight: 800;
@@ -351,7 +351,7 @@ h2 {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -397,20 +397,20 @@ h2 {
 }
 
 .metric-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px 12px;
 }
 
 .metric-line strong {
   min-width: 0;
-  flex: 1 1 96px;
-  overflow-wrap: anywhere;
   font-size: 1rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
+  overflow-wrap: normal;
   text-align: right;
+  word-break: normal;
 }
 
 .metric-line.featured strong {

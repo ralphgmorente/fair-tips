@@ -359,7 +359,7 @@ function MetricStrip({ result }: { result: CalculationResult }) {
         {
           label: "Labor",
           value: `${formatNumber(result.metrics.totalPaidHours)} hrs / ${formatCurrency(
-            result.metrics.netSales
+            result.metrics.totalLaborCost
           )} = ${laborPercent}`
         }
       ]

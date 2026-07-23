@@ -22,6 +22,7 @@ export type SalesOrder = {
   discounts: number;
   refunds: number;
   taxes: number;
+  serviceCharges: number;
   netSales: number;
   orderTotal: number;
   paymentTotal: number;
@@ -43,6 +44,7 @@ export type Shift = {
   clockIn: Date | null;
   clockOut: Date | null;
   paidHours: number;
+  laborCost: number;
   valid: boolean;
 };
 
@@ -83,6 +85,7 @@ export type SummaryMetrics = {
   ordersWithTips: number;
   ordersWithTipsAndNoActiveEmployee: number;
   totalPaidHours: number;
+  totalLaborCost: number;
   employeesFound: number;
   netSales: number;
   laborPercent: number;
@@ -130,6 +133,7 @@ const OPTIONAL_SALES = [
   "Discount",
   "Discounts",
   "Tax Amount",
+  "Service Charge",
   "Refunds Total",
   "Manual Refunds Total",
   "Payments Total",
@@ -137,8 +141,9 @@ const OPTIONAL_SALES = [
   "Order Type",
   "Note"
 ];
-const OPTIONAL_TIMESHEET = ["Total paid hours", "Role"];
+const OPTIONAL_TIMESHEET = ["Total paid hours", "Role", "Wage rate", "Estimated wages"];
 
+const NET_SALES_HEADERS = ["Net Sales", "Net Sales Total", "Net Amount", "Sales Net"];
 const GROSS_SALES_HEADERS = [
   "Gross Sales",
   "Gross Sales Total",
@@ -167,10 +172,28 @@ const REFUND_HEADERS = [
   "Refund Total"
 ];
 const TAX_HEADERS = ["Tax Amount", "Tax", "Taxes", "Sales Tax"];
+const SERVICE_CHARGE_HEADERS = [
+  "Service Charge",
+  "Service Charges",
+  "Service Charge Total",
+  "Service Charges Total"
+];
 const PAYMENT_TOTAL_HEADERS = ["Payments Total", "Payment Total", "Amount Paid", "Paid Amount"];
 const PAYMENT_NOTE_HEADERS = ["Payment Note", "Payment Notes"];
 const ORDER_TYPE_HEADERS = ["Order Type"];
 const NOTE_HEADERS = ["Note", "Notes"];
+const LABOR_COST_HEADERS = [
+  "Estimated wages",
+  "Estimated Wages",
+  "Labor Cost",
+  "Labor Costs",
+  "Total Labor Cost",
+  "Total Pay",
+  "Gross Pay",
+  "Wages",
+  "Estimated Pay"
+];
+const WAGE_RATE_HEADERS = ["Wage rate", "Wage Rate", "Hourly Rate", "Pay Rate", "Rate"];
 
 const MONTHS: Record<string, number> = {
   jan: 0,
@@ -332,8 +355,9 @@ export function calculateTipDistribution(
     review: employee.tipShare === 0 ? "No matching tipped orders" : ""
   }));
   const totalPaidHours = sumBy(employees, (employee) => employee.paidHours);
+  const totalLaborCost = sumBy(parsedTimesheet.shifts, (shift) => shift.laborCost);
   const netSales = sumBy(parsedSales.orders, (order) => order.netSales);
-  const laborPercent = netSales === 0 ? 0 : totalPaidHours / netSales;
+  const laborPercent = netSales === 0 ? 0 : totalLaborCost / netSales;
 
   const metrics: SummaryMetrics = {
     totalTips,
@@ -344,20 +368,21 @@ export function calculateTipDistribution(
       (detail) => detail.tip > 0 && detail.activeStaff === 0
     ).length,
     totalPaidHours,
+    totalLaborCost,
     employeesFound: employees.length,
     netSales,
     laborPercent,
     creditDebitSales: sumBy(
-      parsedSales.orders.filter((order) => isCreditDebitTender(order)),
-      (order) => order.paymentTotal
+      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isCreditDebitTender(order)),
+      (order) => order.netSales
     ),
     cashSales: sumBy(
-      parsedSales.orders.filter((order) => isCashTender(order)),
-      (order) => order.paymentTotal
+      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isCashTender(order)),
+      (order) => order.netSales
     ),
     giftCardSales: sumBy(
-      parsedSales.orders.filter((order) => isGiftCardTender(order)),
-      (order) => order.paymentTotal
+      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isGiftCardTender(order)),
+      (order) => order.netSales
     ),
     grubhubSales: sumBy(
       parsedSales.orders.filter((order) => deliveryPlatform(order) === "grubhub"),
@@ -441,10 +466,12 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const orderNumberIndex = header.lookup[normalizeHeader("Order Number")] as number;
   const tipIndex = header.lookup[normalizeHeader("Tip")] as number;
   const orderTotalIndex = header.lookup[normalizeHeader("Order Total")] as number;
+  const netSalesColumn = findColumn(header.lookup, NET_SALES_HEADERS);
   const grossSalesColumn = findColumn(header.lookup, GROSS_SALES_HEADERS);
   const discountIndexes = findColumns(header.lookup, DISCOUNT_HEADERS);
   const refundIndexes = findColumns(header.lookup, REFUND_HEADERS);
   const taxIndexes = findColumns(header.lookup, TAX_HEADERS);
+  const serviceChargeIndexes = findColumns(header.lookup, SERVICE_CHARGE_HEADERS);
   const paymentTotalColumn = findColumn(header.lookup, PAYMENT_TOTAL_HEADERS);
   const paymentStateIndex = header.lookup[normalizeHeader("Order Payment State")];
   const tenderIndex = header.lookup[normalizeHeader("Tender")];
@@ -501,12 +528,28 @@ export function parseSalesReport(grid: Grid): ParsedSales {
     const discounts = sumOptionalDeductions(row, discountIndexes);
     const refunds = sumOptionalDeductions(row, refundIndexes);
     const taxes = sumOptionalDeductions(row, taxIndexes);
+    const serviceCharges = sumOptionalDeductions(row, serviceChargeIndexes);
     const grossSalesIncludesTaxes =
       !grossSalesColumn ||
       GROSS_SALES_INCLUDES_TAX_HEADERS.some(
         (headerName) => normalizeHeader(headerName) === normalizeHeader(grossSalesColumn.header)
       );
-    const netSales = grossSales - discounts - refunds - (grossSalesIncludesTaxes ? taxes : 0);
+    const parsedNetSales = netSalesColumn
+      ? parseMoney(row[netSalesColumn.index], false)
+      : { valid: false, value: 0 };
+    const netSales = parsedNetSales.valid
+      ? parsedNetSales.value
+      : calculateOrderNetSales({
+          grossSales,
+          hasGrossSalesColumn: Boolean(grossSalesColumn),
+          grossSalesIncludesTaxes,
+          orderTotal: parsedOrderTotal.value,
+          discounts,
+          refunds,
+          taxes,
+          serviceCharges,
+          tips: parsedTip.value
+        });
     const paymentTotal = paymentTotalColumn
       ? parseOptionalMoney(row[paymentTotalColumn.index])
       : parsedOrderTotal.value;
@@ -542,6 +585,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       discounts,
       refunds,
       taxes,
+      serviceCharges,
       netSales,
       orderTotal: parsedOrderTotal.value,
       paymentTotal,
@@ -584,6 +628,8 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
   const clockOutTimeIndex = header.lookup[normalizeHeader("Clock out time")] as number;
   const totalPaidHoursIndex = header.lookup[normalizeHeader("Total paid hours")];
   const roleIndex = header.lookup[normalizeHeader("Role")];
+  const laborCostIndex = findColumn(header.lookup, LABOR_COST_HEADERS)?.index;
+  const wageRateIndex = findColumn(header.lookup, WAGE_RATE_HEADERS)?.index;
   const shifts: Shift[] = [];
 
   grid.slice(header.rowIndex + 1).forEach((row, offset) => {
@@ -607,6 +653,16 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
     const computedPaidHours =
       clockIn && clockOut && clockOut >= clockIn ? diffHours(clockIn, clockOut) : 0;
     const paidHours = paidHoursFromReport.valid ? paidHoursFromReport.value : computedPaidHours;
+    const laborCostFromReport =
+      laborCostIndex === undefined
+        ? { valid: false, value: 0 }
+        : parseMoney(row[laborCostIndex], false);
+    const wageRate = wageRateIndex === undefined ? 0 : parseOptionalMoney(row[wageRateIndex]);
+    const computedLaborCost = Math.max(0, paidHours) * Math.max(0, wageRate);
+    const laborCost =
+      laborCostFromReport.valid && laborCostFromReport.value > 0
+        ? laborCostFromReport.value
+        : computedLaborCost;
     const valid = Boolean(employee && clockIn && clockOut && clockOut >= clockIn);
 
     if (!valid) {
@@ -636,6 +692,7 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
       clockIn,
       clockOut,
       paidHours: Math.max(0, paidHours),
+      laborCost: Math.max(0, laborCost),
       valid
     });
   });
@@ -696,6 +753,7 @@ function emptyResult(
       ordersWithTips: 0,
       ordersWithTipsAndNoActiveEmployee: 0,
       totalPaidHours: 0,
+      totalLaborCost: 0,
       employeesFound: 0,
       netSales: 0,
       laborPercent: 0,
@@ -842,6 +900,34 @@ function findColumns(lookup: HeaderLookup, headers: string[]): number[] {
 
 function sumOptionalDeductions(row: CellValue[], indexes: number[]): number {
   return indexes.reduce((total, index) => total + Math.abs(parseOptionalMoney(row[index])), 0);
+}
+
+function calculateOrderNetSales({
+  grossSales,
+  hasGrossSalesColumn,
+  grossSalesIncludesTaxes,
+  orderTotal,
+  discounts,
+  refunds,
+  taxes,
+  serviceCharges,
+  tips
+}: {
+  grossSales: number;
+  hasGrossSalesColumn: boolean;
+  grossSalesIncludesTaxes: boolean;
+  orderTotal: number;
+  discounts: number;
+  refunds: number;
+  taxes: number;
+  serviceCharges: number;
+  tips: number;
+}): number {
+  if (hasGrossSalesColumn) {
+    return grossSales - discounts - refunds - (grossSalesIncludesTaxes ? taxes : 0);
+  }
+
+  return orderTotal - refunds - taxes - serviceCharges - Math.abs(tips);
 }
 
 function isCreditDebitTender(order: SalesOrder): boolean {
