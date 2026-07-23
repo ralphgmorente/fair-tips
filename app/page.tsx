@@ -2,16 +2,33 @@
 
 import {
   AlertTriangle,
+  Banknote,
+  Bell,
   Calculator,
+  CalendarDays,
+  ChartPie,
+  Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
+  CircleDollarSign,
+  CircleHelp,
+  CreditCard,
   Download,
   FileCheck2,
   FileSpreadsheet,
+  FileText,
   LockKeyhole,
   RotateCcw,
+  Search,
+  Settings,
   ShieldCheck,
-  Upload
+  SlidersHorizontal,
+  Truck,
+  Upload,
+  Users,
+  WalletCards
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { exportTipWorkbook } from "@/lib/export-results";
@@ -113,78 +130,521 @@ export default function Home() {
   }
 
   return (
-    <main className="page-shell">
-      <section className="app-header">
-        <div>
-          <p className="eyebrow">Clover Tip Distribution</p>
-          <h1>Weekly tip payout</h1>
-        </div>
-        <div className="header-actions">
-          <button className="secondary-button compact" type="button" onClick={handleLock}>
-            <LockKeyhole aria-hidden="true" size={17} />
-            Lock
-          </button>
-          <button
-            className="primary-button compact"
-            type="button"
-            disabled={!result || hasErrors}
-            onClick={() => result && exportTipWorkbook(result)}
-          >
-            <Download aria-hidden="true" size={18} />
-            Export Excel
-          </button>
-        </div>
-      </section>
-
-      <section className="upload-grid" aria-label="Report uploads">
-        <UploadPanel
-          title="Sales report"
-          upload={salesUpload}
-          onUpload={(file) => handleUpload("sales", file)}
+    <div className="app-frame">
+      <AppSidebar />
+      <main className="dashboard-main">
+        <DashboardHeader
+          result={result}
+          hasErrors={hasErrors}
+          onLock={handleLock}
+          onExport={() => result && exportTipWorkbook(result)}
         />
-        <UploadPanel
-          title="Timesheet report"
-          upload={timesheetUpload}
-          onUpload={(file) => handleUpload("timesheet", file)}
-        />
-        <section className="action-panel">
-          <button
-            className="primary-button"
-            type="button"
-            disabled={!canCalculate || blockingUploadError}
-            onClick={handleCalculate}
-          >
-            <Calculator aria-hidden="true" size={18} />
-            Calculate tips
-          </button>
-          <button className="secondary-button" type="button" onClick={handleReset}>
-            <RotateCcw aria-hidden="true" size={17} />
-            Reset
-          </button>
-        </section>
-      </section>
 
-      {result ? (
-        <>
-          <ValidationPanel issues={result.issues} />
+        {result && !hasErrors ? (
+          <>
+            <ExecutiveMetrics result={result} />
+            <InsightGrid result={result} />
+          </>
+        ) : null}
 
-          {!hasErrors ? (
-            <>
-              <MetricStrip result={result} />
-              <EdgeCasePanel result={result} />
-              <EmployeeTable result={result} />
-              <UnallocatedOrders result={result} />
-            </>
-          ) : null}
-        </>
-      ) : (
-        <EmptyState
+        <WorkflowGrid
           salesUpload={salesUpload}
           timesheetUpload={timesheetUpload}
           uploadsReady={uploadsReady}
+          canCalculate={canCalculate}
+          blockingUploadError={blockingUploadError}
+          result={result}
+          onSalesUpload={(file) => handleUpload("sales", file)}
+          onTimesheetUpload={(file) => handleUpload("timesheet", file)}
+          onCalculate={handleCalculate}
+          onReset={handleReset}
         />
+
+        {result ? (
+          <>
+            {hasErrors ? <ValidationPanel issues={result.issues} /> : null}
+            {!hasErrors ? (
+              <>
+                <EdgeCasePanel result={result} />
+                <EmployeeTable result={result} />
+                <UnallocatedOrders result={result} />
+              </>
+            ) : null}
+          </>
+        ) : (
+          <EmptyState
+            salesUpload={salesUpload}
+            timesheetUpload={timesheetUpload}
+            uploadsReady={uploadsReady}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function AppSidebar() {
+  const navItems = [
+    { label: "Dashboard", icon: ChartPie, active: true },
+    { label: "Payouts", icon: WalletCards },
+    { label: "Employees", icon: Users },
+    { label: "Reports", icon: FileText },
+    { label: "Settings", icon: Settings }
+  ];
+
+  return (
+    <aside className="app-sidebar" aria-label="Application navigation">
+      <div className="brand-lockup">
+        <span className="brand-mark">FT</span>
+        <span>
+          <strong>Fair Tips</strong>
+          <small>Tip Distribution</small>
+        </span>
+      </div>
+
+      <nav className="sidebar-nav">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a className={item.active ? "active" : ""} href="#" key={item.label}>
+              <Icon aria-hidden="true" size={19} />
+              <span>{item.label}</span>
+            </a>
+          );
+        })}
+      </nav>
+
+      <div className="sidebar-support">
+        <CircleHelp aria-hidden="true" size={18} />
+        <strong>Need help?</strong>
+        <span>Review uploads, payouts, and employee tips before export.</span>
+      </div>
+    </aside>
+  );
+}
+
+function DashboardHeader({
+  result,
+  hasErrors,
+  onLock,
+  onExport
+}: {
+  result: CalculationResult | null;
+  hasErrors: boolean;
+  onLock: () => void;
+  onExport: () => void;
+}) {
+  return (
+    <section className="dashboard-header">
+      <div className="dashboard-title">
+        <div className="title-row">
+          <h1>Weekly tip payout</h1>
+          <span className={result && !hasErrors ? "review-pill ready" : "review-pill"}>
+            {result && !hasErrors ? "Ready to review" : "Setup required"}
+          </span>
+        </div>
+        <div className="period-control" aria-label="Pay period">
+          <CalendarDays aria-hidden="true" size={17} />
+          <span>{result ? formatDateRange(result) : "Current pay period"}</span>
+          <button aria-label="Previous period" type="button">
+            <ChevronLeft aria-hidden="true" size={17} />
+          </button>
+          <button aria-label="Next period" type="button">
+            <ChevronRight aria-hidden="true" size={17} />
+          </button>
+        </div>
+      </div>
+
+      <div className="dashboard-actions">
+        <button className="icon-button" aria-label="Notifications" type="button">
+          <Bell aria-hidden="true" size={18} />
+        </button>
+        <button className="secondary-button compact" type="button" onClick={onLock}>
+          <LockKeyhole aria-hidden="true" size={17} />
+          Lock week
+        </button>
+        <button
+          className="primary-button compact"
+          type="button"
+          disabled={!result || hasErrors}
+          onClick={onExport}
+        >
+          <Download aria-hidden="true" size={18} />
+          Export Excel
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveMetrics({ result }: { result: CalculationResult }) {
+  const laborPercent =
+    result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
+  const payoutPercent =
+    result.metrics.netSales === 0
+      ? "0%"
+      : formatPercent(result.metrics.totalAllocatedTips / result.metrics.netSales);
+  const unallocatedPercent =
+    result.metrics.totalTips + result.metrics.eventTips === 0
+      ? "0%"
+      : formatPercent(
+          result.metrics.totalUnallocatedTips /
+            (result.metrics.totalTips + result.metrics.eventTips)
+        );
+  const kpis = [
+    {
+      label: "Net Sales",
+      value: formatCurrency(result.metrics.netSales),
+      detail: "Restaurant revenue",
+      icon: CircleDollarSign
+    },
+    {
+      label: "Labor",
+      value: laborPercent,
+      detail: `${formatCurrency(result.metrics.totalLaborCost)} labor cost`,
+      icon: Users
+    },
+    {
+      label: "Total payout",
+      value: formatCurrency(result.metrics.totalAllocatedTips),
+      detail: `${payoutPercent} of net sales`,
+      icon: WalletCards,
+      featured: true
+    },
+    {
+      label: "Unallocated",
+      value: formatCurrency(result.metrics.totalUnallocatedTips),
+      detail: `${unallocatedPercent} of tips`,
+      icon: AlertTriangle,
+      warning: result.metrics.totalUnallocatedTips > 0
+    },
+    {
+      label: "Employees",
+      value: String(result.metrics.employeesFound),
+      detail: `${formatNumber(result.metrics.totalPaidHours)} total hours`,
+      icon: Users
+    }
+  ];
+
+  return (
+    <section className="executive-grid" aria-label="Executive summary">
+      {kpis.map((kpi) => {
+        const Icon = kpi.icon;
+        return (
+          <div
+            className={[
+              "executive-card",
+              kpi.featured ? "featured" : "",
+              kpi.warning ? "warning" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            key={kpi.label}
+          >
+            <span className="executive-icon">
+              <Icon aria-hidden="true" size={22} />
+            </span>
+            <span className="executive-label">{kpi.label}</span>
+            <strong>{kpi.value}</strong>
+            <small>{kpi.detail}</small>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function InsightGrid({ result }: { result: CalculationResult }) {
+  const deliveryTotal =
+    result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
+  const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
+
+  return (
+    <section className="insight-grid" aria-label="Sales and payment insights">
+      <SalesMixCard result={result} />
+      <BreakdownCard
+        title="Delivery Platforms"
+        total={deliveryTotal}
+        icon={Truck}
+        rows={[
+          ["Uber Eats", result.metrics.uberEatsSales],
+          ["DoorDash", result.metrics.doorDashSales],
+          ["Grubhub", result.metrics.grubhubSales]
+        ]}
+        footer={`${formatPercent(safeRatio(deliveryTotal, result.metrics.netSales))} of net sales`}
+      />
+      <BreakdownCard
+        title="Credit & Debit"
+        total={result.metrics.creditDebitSales}
+        icon={CreditCard}
+        rows={[["Card sales", result.metrics.creditDebitSales]]}
+        footer={`${formatPercent(
+          safeRatio(result.metrics.creditDebitSales, result.metrics.netSales)
+        )} of net sales`}
+      />
+      <BreakdownCard
+        title="Cash & Gift Cards"
+        total={cashGiftTotal}
+        icon={Banknote}
+        rows={[
+          ["Cash", result.metrics.cashSales],
+          ["Gift Cards", result.metrics.giftCardSales]
+        ]}
+        footer={`${formatPercent(safeRatio(cashGiftTotal, result.metrics.netSales))} of net sales`}
+      />
+    </section>
+  );
+}
+
+function SalesMixCard({ result }: { result: CalculationResult }) {
+  const deliveryTotal =
+    result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
+  const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
+  const knownTotal = deliveryTotal + result.metrics.creditDebitSales + cashGiftTotal;
+  const otherTotal = Math.max(0, result.metrics.netSales - knownTotal);
+  const total = Math.max(1, result.metrics.netSales || knownTotal);
+  const deliveryEnd = safeRatio(deliveryTotal, total) * 100;
+  const creditEnd = deliveryEnd + safeRatio(result.metrics.creditDebitSales, total) * 100;
+  const cashEnd = creditEnd + safeRatio(cashGiftTotal, total) * 100;
+  const donutStyle = {
+    background: `conic-gradient(#075b4f 0 ${deliveryEnd}%, #2f9f79 ${deliveryEnd}% ${creditEnd}%, #dbe8df ${creditEnd}% ${cashEnd}%, #edf2ee ${cashEnd}% 100%)`
+  };
+
+  return (
+    <section className="panel-card sales-mix-card">
+      <div className="panel-heading">
+        <h2>Sales mix</h2>
+        <span>{formatCurrency(result.metrics.netSales)} net sales</span>
+      </div>
+      <div className="sales-mix-body">
+        <div className="donut-chart" style={donutStyle} aria-hidden="true">
+          <span />
+        </div>
+        <div className="mix-list">
+          <MixRow label="Delivery Platforms" value={deliveryTotal} total={total} tone="delivery" />
+          <MixRow
+            label="Credit & Debit"
+            value={result.metrics.creditDebitSales}
+            total={total}
+            tone="cards"
+          />
+          <MixRow label="Cash & Gift Cards" value={cashGiftTotal} total={total} tone="cash" />
+          {otherTotal > 0 ? (
+            <MixRow label="Other sales" value={otherTotal} total={total} tone="other" />
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MixRow({
+  label,
+  value,
+  total,
+  tone
+}: {
+  label: string;
+  value: number;
+  total: number;
+  tone: string;
+}) {
+  return (
+    <div className="mix-row">
+      <span>
+        <i data-tone={tone} />
+        {label}
+      </span>
+      <strong>{formatCurrency(value)}</strong>
+      <small>{formatPercent(safeRatio(value, total))}</small>
+    </div>
+  );
+}
+
+function BreakdownCard({
+  title,
+  total,
+  icon: Icon,
+  rows,
+  footer
+}: {
+  title: string;
+  total: number;
+  icon: typeof Truck;
+  rows: Array<[string, number]>;
+  footer: string;
+}) {
+  return (
+    <section className="panel-card breakdown-card">
+      <div className="breakdown-title">
+        <span className="breakdown-icon">
+          <Icon aria-hidden="true" size={20} />
+        </span>
+        <div>
+          <h2>{title}</h2>
+          <strong>{formatCurrency(total)}</strong>
+        </div>
+      </div>
+      <div className="breakdown-rows">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{formatCurrency(value)}</strong>
+          </div>
+        ))}
+      </div>
+      <footer>{footer}</footer>
+    </section>
+  );
+}
+
+function WorkflowGrid({
+  salesUpload,
+  timesheetUpload,
+  uploadsReady,
+  canCalculate,
+  blockingUploadError,
+  result,
+  onSalesUpload,
+  onTimesheetUpload,
+  onCalculate,
+  onReset
+}: {
+  salesUpload: UploadState;
+  timesheetUpload: UploadState;
+  uploadsReady: boolean;
+  canCalculate: boolean;
+  blockingUploadError: boolean;
+  result: CalculationResult | null;
+  onSalesUpload: (file: File | null) => void;
+  onTimesheetUpload: (file: File | null) => void;
+  onCalculate: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <section className="workflow-grid" aria-label="Upload and payout workflow">
+      <section className="panel-card upload-validate-card">
+        <div className="panel-heading">
+          <h2>Upload & validate</h2>
+          <div className="step-tabs" aria-label="Workflow steps">
+            <span className="active">1 Upload</span>
+            <span className={uploadsReady ? "active" : ""}>2 Validate</span>
+            <span className={result ? "active" : ""}>3 Review</span>
+            <span>4 Payout</span>
+          </div>
+        </div>
+        <div className="upload-row">
+          <UploadPanel
+            title="Sales report"
+            upload={salesUpload}
+            onUpload={onSalesUpload}
+          />
+          <UploadPanel
+            title="Timesheet report"
+            upload={timesheetUpload}
+            onUpload={onTimesheetUpload}
+          />
+        </div>
+        <div className="workflow-footer">
+          <ValidationSnapshot result={result} uploadsReady={uploadsReady} />
+          <div className="workflow-actions">
+            <button
+              className="primary-button"
+              type="button"
+              disabled={!canCalculate || blockingUploadError}
+              onClick={onCalculate}
+            >
+              <Calculator aria-hidden="true" size={18} />
+              Calculate tips
+            </button>
+            <button className="secondary-button" type="button" onClick={onReset}>
+              <RotateCcw aria-hidden="true" size={17} />
+              Reset
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <PayoutProgress result={result} uploadsReady={uploadsReady} />
+    </section>
+  );
+}
+
+function ValidationSnapshot({
+  result,
+  uploadsReady
+}: {
+  result: CalculationResult | null;
+  uploadsReady: boolean;
+}) {
+  if (!result) {
+    return (
+      <div className="validation-snapshot">
+        <Upload aria-hidden="true" size={18} />
+        <span>{uploadsReady ? "Reports ready to calculate" : "Waiting for both reports"}</span>
+      </div>
+    );
+  }
+
+  const errors = result.issues.filter((issue) => issue.severity === "error").length;
+  const warnings = result.issues.filter((issue) => issue.severity === "warning").length;
+
+  return (
+    <div className={errors ? "validation-snapshot error" : "validation-snapshot ready"}>
+      {errors ? (
+        <AlertTriangle aria-hidden="true" size={18} />
+      ) : (
+        <CheckCircle2 aria-hidden="true" size={18} />
       )}
-    </main>
+      <span>
+        {errors ? `${errors} errors` : "Validation complete"}
+        <small>
+          {errors} errors, {warnings} warnings
+        </small>
+      </span>
+    </div>
+  );
+}
+
+function PayoutProgress({
+  result,
+  uploadsReady
+}: {
+  result: CalculationResult | null;
+  uploadsReady: boolean;
+}) {
+  const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
+  const steps = [
+    { label: "Data uploaded", status: uploadsReady ? "done" : "pending" },
+    { label: "Validated", status: result && !hasErrors ? "done" : result ? "issue" : "pending" },
+    { label: "Under review", status: result && !hasErrors ? "current" : "pending" },
+    { label: "Payout ready", status: "pending" }
+  ];
+
+  return (
+    <section className="panel-card payout-progress-card">
+      <div className="panel-heading">
+        <h2>Payout progress</h2>
+        <span>{result && !hasErrors ? "In progress" : "Pending"}</span>
+      </div>
+      <div className="progress-track">
+        {steps.map((step, index) => (
+          <div className={`progress-step ${step.status}`} key={step.label}>
+            <span>{step.status === "done" ? <Check aria-hidden="true" size={15} /> : index + 1}</span>
+            <strong>{step.label}</strong>
+            <small>
+              {step.status === "done"
+                ? "Complete"
+                : step.status === "current"
+                  ? "Review now"
+                  : step.status === "issue"
+                    ? "Needs fixes"
+                    : "Pending"}
+            </small>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -339,112 +799,6 @@ function EmptyState({
   );
 }
 
-function MetricStrip({ result }: { result: CalculationResult }) {
-  const laborPercent =
-    result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
-  const dashboardCards: Array<{
-    title: string;
-    tone: string;
-    rows: Array<{ label: string; value: string; featured?: boolean }>;
-  }> = [
-    {
-      title: "Net Sales & Labor",
-      tone: "primary",
-      rows: [
-        {
-          label: "Net Sales",
-          value: formatCurrency(result.metrics.netSales),
-          featured: true
-        },
-        {
-          label: "Labor",
-          value: laborPercent
-        }
-      ]
-    },
-    {
-      title: "Credit & Debit Sales",
-      tone: "success",
-      rows: [
-        {
-          label: "Credit & Debit",
-          value: formatCurrency(result.metrics.creditDebitSales),
-          featured: true
-        }
-      ]
-    },
-    {
-      title: "Cash & Gift Cards",
-      tone: "attention",
-      rows: [
-        {
-          label: "Cash",
-          value: formatCurrency(result.metrics.cashSales),
-          featured: true
-        },
-        {
-          label: "Gift Cards",
-          value: formatCurrency(result.metrics.giftCardSales),
-          featured: true
-        }
-      ]
-    },
-    {
-      title: "Delivery Platforms",
-      tone: "event",
-      rows: [
-        {
-          label: "Grubhub",
-          value: formatCurrency(result.metrics.grubhubSales)
-        },
-        {
-          label: "DoorDash",
-          value: formatCurrency(result.metrics.doorDashSales)
-        },
-        {
-          label: "Uber Eats",
-          value: formatCurrency(result.metrics.uberEatsSales)
-        }
-      ]
-    }
-  ];
-  const metrics = [
-    ["Total payout", formatCurrency(result.metrics.totalAllocatedTips), "success"],
-    ["Store allocated", formatCurrency(result.metrics.allocatedTips), "primary"],
-    ["Event allocated", formatCurrency(result.metrics.eventAllocatedTips), "event"],
-    ["Unallocated", formatCurrency(result.metrics.totalUnallocatedTips), "attention"],
-    ["Event sales", formatCurrency(result.metrics.eventSales), "event"],
-    ["Event tips", formatCurrency(result.metrics.eventTips), "event"],
-    ["Store orders", String(result.metrics.ordersWithTips), "neutral"],
-    ["Event orders", String(result.metrics.eventOrdersWithTips), "neutral"],
-    ["Employees", String(result.metrics.employeesFound), "neutral"]
-  ];
-
-  return (
-    <section className="metric-strip" aria-label="Calculation summary">
-      {dashboardCards.map((card) => (
-        <div className="metric-tile metric-tile-stacked" data-tone={card.tone} key={card.title}>
-          <span>{card.title}</span>
-          <div className="metric-lines">
-            {card.rows.map((row) => (
-              <div className={row.featured ? "metric-line featured" : "metric-line"} key={row.label}>
-                <span>{row.label}</span>
-                <strong>{row.value}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {metrics.map(([label, value, tone]) => (
-        <div className="metric-tile" data-tone={tone} key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
-    </section>
-  );
-}
-
 function EdgeCasePanel({ result }: { result: CalculationResult }) {
   const totalTips = result.metrics.totalTips + result.metrics.eventTips;
 
@@ -486,6 +840,7 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
 }
 
 function EmployeeTable({ result }: { result: CalculationResult }) {
+  const [employeeQuery, setEmployeeQuery] = useState("");
   const totalSharePercent = result.metrics.totalAllocatedTips > 0 ? 1 : 0;
   const totalStoreHours = result.employees.reduce(
     (total, employee) => total + employee.storeHours,
@@ -495,11 +850,35 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
     (total, employee) => total + employee.eventHours,
     0
   );
+  const visibleEmployees = useMemo(() => {
+    const query = normalizeSearch(employeeQuery);
+    if (!query) {
+      return result.employees;
+    }
+
+    return result.employees.filter((employee) =>
+      normalizeSearch(employee.employee).includes(query)
+    );
+  }, [employeeQuery, result.employees]);
 
   return (
     <section className="table-panel">
       <div className="section-heading">
-        <h2>Employee summary</h2>
+        <div className="employee-heading">
+          <h2>Employee summary</h2>
+          <label className="employee-search">
+            <Search aria-hidden="true" size={16} />
+            <input
+              type="search"
+              placeholder="Search employees..."
+              value={employeeQuery}
+              onChange={(event) => setEmployeeQuery(event.target.value)}
+            />
+          </label>
+          <button className="icon-button" aria-label="Filter employees" type="button">
+            <SlidersHorizontal aria-hidden="true" size={16} />
+          </button>
+        </div>
         <span>
           {formatCurrency(result.metrics.totalAllocatedTips)} allocated across{" "}
           {result.metrics.employeesFound} employees
@@ -521,17 +900,22 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
             </tr>
           </thead>
           <tbody>
-            {result.employees.length === 0 ? (
+            {visibleEmployees.length === 0 ? (
               <tr>
                 <td className="table-empty" colSpan={9}>
-                  No employees were found in the timesheet report.
+                  {result.employees.length === 0
+                    ? "No employees were found in the timesheet report."
+                    : "No employees match this search."}
                 </td>
               </tr>
             ) : (
-              result.employees.map((employee) => (
+              visibleEmployees.map((employee) => (
                 <tr key={employee.employee}>
                   <td data-label="Employee">
-                    <strong>{employee.employee}</strong>
+                    <span className="employee-cell">
+                      <span className="employee-avatar">{employeeInitials(employee.employee)}</span>
+                      <strong>{employee.employee}</strong>
+                    </span>
                   </td>
                   <td data-label="Store hours" className="numeric">
                     {formatNumber(employee.storeHours)}
@@ -720,6 +1104,57 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
       ) : null}
     </section>
   );
+}
+
+function formatDateRange(result: CalculationResult): string {
+  const dates = result.salesOrders
+    .map((order) => order.orderDate)
+    .filter((date): date is Date => Boolean(date))
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  if (dates.length === 0) {
+    return "Current pay period";
+  }
+
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric"
+  });
+  const yearFormatter = new Intl.DateTimeFormat("en-US", {
+    year: "numeric"
+  });
+
+  if (first.toDateString() === last.toDateString()) {
+    return `Week of ${dateFormatter.format(first)}, ${yearFormatter.format(first)}`;
+  }
+
+  return `Week of ${dateFormatter.format(first)} - ${dateFormatter.format(last)}, ${yearFormatter.format(last)}`;
+}
+
+function safeRatio(value: number, total: number): number {
+  return total === 0 ? 0 : value / total;
+}
+
+function employeeInitials(name: string): string {
+  const pieces = name
+    .split(/\s+/)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+
+  if (pieces.length === 0) {
+    return "--";
+  }
+
+  return pieces
+    .slice(0, 2)
+    .map((piece) => piece[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 function formatPool(pool: "store" | "event"): string {
