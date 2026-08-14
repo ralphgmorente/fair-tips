@@ -118,6 +118,15 @@ export type CalculationResult = {
 const EVENT_ORDER_NUMBER = "CLOVERGO";
 const EVENT_ROLE = "evento";
 const SALES_REQUIRED = ["Order Date", "Order ID", "Order Number", "Tip", "Order Total"];
+const PAYMENTS_REQUIRED = [
+  "Payment Date",
+  "Payment ID",
+  "Amount",
+  "Tip Amount",
+  "Order ID",
+  "Order Date",
+  "Result"
+];
 const TIMESHEET_REQUIRED = [
   "Name",
   "Clock in date",
@@ -174,14 +183,26 @@ const REFUND_HEADERS = [
 const TAX_HEADERS = ["Tax Amount", "Tax", "Taxes", "Sales Tax"];
 const SERVICE_CHARGE_HEADERS = [
   "Service Charge",
+  "Service Charge Amount",
   "Service Charges",
   "Service Charge Total",
   "Service Charges Total"
 ];
-const PAYMENT_TOTAL_HEADERS = ["Payments Total", "Payment Total", "Amount Paid", "Paid Amount"];
+const PAYMENT_TOTAL_HEADERS = [
+  "Payments Total",
+  "Payment Total",
+  "Amount",
+  "Amount Paid",
+  "Paid Amount"
+];
 const PAYMENT_NOTE_HEADERS = ["Payment Note", "Payment Notes"];
 const ORDER_TYPE_HEADERS = ["Order Type"];
-const NOTE_HEADERS = ["Note", "Notes"];
+const NOTE_HEADERS = ["Note", "Notes", "Custom Fields"];
+const PAYMENT_RESULT_HEADERS = ["Order Payment State", "Result"];
+const PAYMENT_ID_HEADERS = ["Payment ID"];
+const TIP_HEADERS = ["Tip", "Tip Amount"];
+const ORDER_TOTAL_HEADERS = ["Order Total", "Amount"];
+const ORDER_NUMBER_HEADERS = ["Order Number", "Invoice Number"];
 const LABOR_COST_HEADERS = [
   "Estimated wages",
   "Estimated Wages",
@@ -426,11 +447,11 @@ export function calculateTipDistribution(
     });
   }
 
-  if (parsedSales.orders.some((order) => order.paymentState && order.paymentState.toLowerCase() !== "paid")) {
+  if (parsedSales.orders.some((order) => order.paymentState && !isSuccessfulPaymentState(order.paymentState))) {
     issues.push({
       severity: "warning",
       source: "sales",
-      message: "Some sales rows are not marked Paid. The workbook includes them, so this app includes them too."
+      message: "Some sales rows are not marked Paid or Success. The app includes them for review."
     });
   }
 
@@ -446,7 +467,10 @@ export function calculateTipDistribution(
 
 export function parseSalesReport(grid: Grid): ParsedSales {
   const issues: ValidationIssue[] = [];
-  const header = findHeader(grid, SALES_REQUIRED);
+  const ordersHeader = findHeader(grid, SALES_REQUIRED);
+  const paymentsHeader = ordersHeader ? null : findHeader(grid, PAYMENTS_REQUIRED);
+  const header = ordersHeader ?? paymentsHeader;
+  const isPaymentsReport = Boolean(paymentsHeader);
 
   if (!header) {
     return {
@@ -455,7 +479,8 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         {
           severity: "error",
           source: "sales",
-          message: `Missing required sales headers: ${SALES_REQUIRED.join(", ")}.`
+          message:
+            "Missing required sales headers. Upload either a Clover orders export or a Clover payments export."
         }
       ]
     };
@@ -463,9 +488,13 @@ export function parseSalesReport(grid: Grid): ParsedSales {
 
   const orderDateIndex = header.lookup[normalizeHeader("Order Date")] as number;
   const orderIdIndex = header.lookup[normalizeHeader("Order ID")] as number;
-  const orderNumberIndex = header.lookup[normalizeHeader("Order Number")] as number;
-  const tipIndex = header.lookup[normalizeHeader("Tip")] as number;
-  const orderTotalIndex = header.lookup[normalizeHeader("Order Total")] as number;
+  const paymentIdIndex = findColumn(header.lookup, PAYMENT_ID_HEADERS)?.index;
+  const orderNumberColumn = findColumn(header.lookup, ORDER_NUMBER_HEADERS);
+  const tipColumn = findColumn(header.lookup, TIP_HEADERS) as { index: number; header: string };
+  const orderTotalColumn = findColumn(header.lookup, ORDER_TOTAL_HEADERS) as {
+    index: number;
+    header: string;
+  };
   const netSalesColumn = findColumn(header.lookup, NET_SALES_HEADERS);
   const grossSalesColumn = findColumn(header.lookup, GROSS_SALES_HEADERS);
   const discountIndexes = findColumns(header.lookup, DISCOUNT_HEADERS);
@@ -473,13 +502,14 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const taxIndexes = findColumns(header.lookup, TAX_HEADERS);
   const serviceChargeIndexes = findColumns(header.lookup, SERVICE_CHARGE_HEADERS);
   const paymentTotalColumn = findColumn(header.lookup, PAYMENT_TOTAL_HEADERS);
-  const paymentStateIndex = header.lookup[normalizeHeader("Order Payment State")];
+  const paymentStateIndex = findColumn(header.lookup, PAYMENT_RESULT_HEADERS)?.index;
   const tenderIndex = header.lookup[normalizeHeader("Tender")];
   const paymentNoteIndex = findColumn(header.lookup, PAYMENT_NOTE_HEADERS)?.index;
   const orderTypeIndex = findColumn(header.lookup, ORDER_TYPE_HEADERS)?.index;
   const noteIndex = findColumn(header.lookup, NOTE_HEADERS)?.index;
   const orders: SalesOrder[] = [];
   const seenOrderIds = new Set<string>();
+  let skippedFailedPayments = 0;
 
   grid.slice(header.rowIndex + 1).forEach((row, offset) => {
     const rowNumber = header.rowIndex + offset + 2;
@@ -488,10 +518,18 @@ export function parseSalesReport(grid: Grid): ParsedSales {
     }
 
     const rawDate = cellText(row[orderDateIndex]);
-    const orderId = cellText(row[orderIdIndex]);
-    const orderNumber = cellText(row[orderNumberIndex]);
-    const tipCell = row[tipIndex];
-    const orderTotalCell = row[orderTotalIndex];
+    const paymentId = paymentIdIndex === undefined ? "" : cellText(row[paymentIdIndex]);
+    const orderId = cellText(row[orderIdIndex]) || paymentId;
+    const orderNumber =
+      orderNumberColumn === null ? "" : cellText(row[orderNumberColumn.index]);
+    const paymentState = paymentStateIndex === undefined ? "" : cellText(row[paymentStateIndex]);
+    if (isPaymentsReport && paymentState && !isSuccessfulPaymentState(paymentState)) {
+      skippedFailedPayments += 1;
+      return;
+    }
+
+    const tipCell = row[tipColumn.index];
+    const orderTotalCell = row[orderTotalColumn.index];
     const tipText = cellText(tipCell);
 
     if (!rawDate && !orderId && !tipText) {
@@ -504,7 +542,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         severity: "error",
         source: "sales",
         row: rowNumber,
-        field: "Tip",
+        field: tipColumn.header,
         message: "Tip must be a number."
       });
       return;
@@ -516,8 +554,8 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         severity: "error",
         source: "sales",
         row: rowNumber,
-        field: "Order Total",
-        message: "Order Total must be a number."
+        field: orderTotalColumn.header,
+        message: `${orderTotalColumn.header} must be a number.`
       });
       return;
     }
@@ -562,7 +600,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         field: "Order ID",
         message: "Order ID is blank. The row is still included in the calculation."
       });
-    } else if (seenOrderIds.has(orderId)) {
+    } else if (!isPaymentsReport && seenOrderIds.has(orderId)) {
       issues.push({
         severity: "warning",
         source: "sales",
@@ -590,7 +628,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       orderTotal: parsedOrderTotal.value,
       paymentTotal,
       tip: parsedTip.value,
-      paymentState: paymentStateIndex === undefined ? "" : cellText(row[paymentStateIndex]),
+      paymentState,
       tender: tenderIndex === undefined ? "" : cellText(row[tenderIndex]),
       paymentNote: paymentNoteIndex === undefined ? "" : cellText(row[paymentNoteIndex]),
       orderType: orderTypeIndex === undefined ? "" : cellText(row[orderTypeIndex]),
@@ -599,6 +637,16 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER
     });
   });
+
+  if (skippedFailedPayments > 0) {
+    issues.push({
+      severity: "warning",
+      source: "sales",
+      message: `${skippedFailedPayments} failed payment ${
+        skippedFailedPayments === 1 ? "row was" : "rows were"
+      } skipped.`
+    });
+  }
 
   return { orders, issues };
 }
@@ -928,6 +976,11 @@ function calculateOrderNetSales({
   }
 
   return orderTotal - refunds - taxes - serviceCharges - Math.abs(tips);
+}
+
+function isSuccessfulPaymentState(value: string): boolean {
+  const state = normalizeHeader(value);
+  return state === "paid" || state === "success" || state === "successful";
 }
 
 function isCreditDebitTender(order: SalesOrder): boolean {

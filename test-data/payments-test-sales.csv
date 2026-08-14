@@ -1,0 +1,4 @@
+Payment Date,Payment ID,External Payment ID,Invoice Number,Card Auth Code,Transaction #,Note,Tender,Card Brand,Card Number,Card Entry Type,Currency,Amount,Tax Amount,Tip Amount,Service Charge Amount,Customer Name,Payment Employee ID,Payment Employee Name,Payment Employee Custom ID,Order ID,Order Date,Order Employee ID,Order Employee Name,Order Employee Custom ID,Result,Device,# Refunds,Refund Amount,Custom Fields
+01-May-2026 10:00 AM PDT,PAY-001,,,,,,Credit Card,,,,USD,16.08,1.08,3.00,,,EMP-1,Alex Rivera,,ORDER-001,01-May-2026 10:00 AM PDT,EMP-1,Alex Rivera,,SUCCESS,Clover Store,,,
+01-May-2026 11:00 AM PDT,PAY-002,,,,,,Cash,,,,USD,10.72,0.72,,,,EMP-1,Alex Rivera,,ORDER-002,01-May-2026 11:00 AM PDT,EMP-1,Alex Rivera,,SUCCESS,Clover Store,,,
+01-May-2026 12:00 PM PDT,PAY-003,,,,,,Credit Card,,,,USD,21.44,1.44,4.00,,,EMP-1,Alex Rivera,,ORDER-003,01-May-2026 12:00 PM PDT,EMP-1,Alex Rivera,,FAIL,Clover Store,,,

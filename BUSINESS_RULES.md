@@ -4,7 +4,7 @@ This app recreates the logic from `Clover_Tip_Distribution_Template.xlsx`.
 
 ## Workbook Structure
 
-- `Sales Report Paste`: raw Clover order export. Required columns are `Order Date`, `Order ID`, `Order Number`, `Tip`, and `Order Total`.
+- `Sales Report Paste`: raw Clover order export or payments export. The original orders export requires `Order Date`, `Order ID`, `Order Number`, `Tip`, and `Order Total`. The payments export requires `Payment Date`, `Payment ID`, `Amount`, `Tip Amount`, `Order ID`, `Order Date`, and `Result`.
 - `Timesheet Report Paste`: raw Clover timesheet export. Required columns are `Name`, `Clock in date`, `Clock in time`, `Clock out date`, and `Clock out time`.
 - `Shift Calc`: cleaned shift rows with employee name, role, work area, clock-in, clock-out, paid hours, validity, and first employee row.
 - `Tip Allocation Detail`: one row per sale and one allocation column per employee.
@@ -17,6 +17,10 @@ This app recreates the logic from `Clover_Tip_Distribution_Template.xlsx`.
 - A timesheet row is ignored when `Name` is blank, `-`, `Name`, or starts with `Totals for`.
 - A valid shift has an employee name, a parseable clock-in, a parseable clock-out, and `clock-out >= clock-in`.
 - Paid hours come from `Total paid hours` when that value is numeric. Otherwise paid hours are calculated as `(clock-out - clock-in) * 24`.
+- Clover payments exports are accepted in addition to Clover orders exports.
+- Payments export rows where `Result` is not `SUCCESS` are skipped.
+- For payments exports, `Amount` is treated as payment total and `Tip Amount` is treated as the order tip for tip allocation.
+- For payments exports, net sales are calculated from `Amount - Tax Amount - Service Charge Amount - Tip Amount - Refund Amount`.
 - A timesheet row where `Role` equals `Evento` is an event shift. Blank or other role values are store shifts.
 - Sales rows with `Order Number` equal to `CLOVERGO` are event/kiosk sales.
 - Event/kiosk sales are separated from the store tip pool.

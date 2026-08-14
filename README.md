@@ -6,7 +6,7 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 
 ## Features
 
-- Upload Clover sales report
+- Upload Clover orders/sales report or the newer Clover payments report
 - Upload Clover timesheet report
 - Validate report structure before calculating
 - Split each order tip across clocked-in staff
@@ -21,7 +21,10 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 
 ## Business Rules
 
-- Sales report must include `Order Date`, `Order ID`, `Order Number`, `Tip`, and `Order Total`.
+- Sales report can be either the original Clover orders export or the newer Clover payments export.
+- Original orders exports must include `Order Date`, `Order ID`, `Order Number`, `Tip`, and `Order Total`.
+- Payments exports must include `Payment Date`, `Payment ID`, `Amount`, `Tip Amount`, `Order ID`, `Order Date`, and `Result`.
+- Failed payments are skipped; successful payments use `Amount` as payment total and `Tip Amount` as tips.
 - Timesheet report must include `Name`, `Clock in date`, `Clock in time`, `Clock out date`, and `Clock out time`.
 - A valid shift requires an employee name, clock-in time, clock-out time, and `clock-out >= clock-in`.
 - Paid hours come from `Total paid hours` when available. Otherwise they are calculated from clock-in and clock-out.
