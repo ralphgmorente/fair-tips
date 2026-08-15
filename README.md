@@ -1,6 +1,6 @@
-# Clover Tip Distribution
+# ShiftFlow
 
-A simple SaaS-style web app for restaurant and coffee shop managers to calculate fair weekly tip payouts from Clover sales and timesheet reports.
+A simple SaaS-style web app for restaurant and coffee shop managers to review business metrics and calculate fair weekly tip payouts from Clover sales and timesheet reports.
 
 The app recreates the logic from the original Excel workbook: each tipped order is matched to the employees who were clocked in at the order time, then the tip is split equally among those active employees.
 

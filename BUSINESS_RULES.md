@@ -1,4 +1,4 @@
-# Clover Tip Distribution Business Rules
+# ShiftFlow Business Rules
 
 This app recreates the logic from `Clover_Tip_Distribution_Template.xlsx`.
 

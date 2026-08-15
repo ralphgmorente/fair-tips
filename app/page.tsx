@@ -3,22 +3,15 @@
 import {
   AlertTriangle,
   Banknote,
-  Bell,
   Calculator,
   CalendarDays,
   ChartPie,
-  Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   CheckCircle2,
   CircleDollarSign,
   CircleHelp,
   CreditCard,
   Download,
-  FileCheck2,
-  FileSpreadsheet,
-  FileText,
   LockKeyhole,
   RotateCcw,
   Search,
@@ -26,6 +19,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Truck,
+  type LucideIcon,
   Upload,
   Users,
   WalletCards
@@ -44,6 +38,8 @@ import {
   type ValidationIssue
 } from "@/lib/tip-calculator";
 
+type AppView = "dashboard" | "tips" | "settings";
+
 type UploadState = {
   fileName: string;
   rows: Grid | null;
@@ -60,6 +56,7 @@ const emptyUpload: UploadState = {
 
 export default function Home() {
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [activeView, setActiveView] = useState<AppView>("dashboard");
   const [salesUpload, setSalesUpload] = useState<UploadState>(emptyUpload);
   const [timesheetUpload, setTimesheetUpload] = useState<UploadState>(emptyUpload);
   const [result, setResult] = useState<CalculationResult | null>(null);
@@ -68,6 +65,13 @@ export default function Home() {
   const canCalculate = uploadsReady;
   const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
   const blockingUploadError = Boolean(salesUpload.error || timesheetUpload.error);
+  const showReportSetup = !result || hasErrors;
+  const pageTitle =
+    activeView === "dashboard"
+      ? "Business Dashboard"
+      : activeView === "tips"
+        ? "Weekly Tip Distribution"
+        : "Settings";
 
   useEffect(() => {
     setIsUnlocked(sessionStorage.getItem("fairTipsUnlocked") === "true");
@@ -131,74 +135,64 @@ export default function Home() {
 
   return (
     <div className="app-frame">
-      <AppSidebar />
+      <AppSidebar activeView={activeView} onViewChange={setActiveView} />
       <main className="dashboard-main">
         <DashboardHeader
+          title={pageTitle}
           result={result}
           hasErrors={hasErrors}
           onLock={handleLock}
           onExport={() => result && exportTipWorkbook(result)}
         />
 
-        {result && !hasErrors ? (
+        {showReportSetup ? (
           <>
-            <ExecutiveMetrics result={result} />
-            <InsightGrid result={result} />
+            <ReportSetupPanel
+              salesUpload={salesUpload}
+              timesheetUpload={timesheetUpload}
+              uploadsReady={uploadsReady}
+              canCalculate={canCalculate}
+              blockingUploadError={blockingUploadError}
+              result={result}
+              onSalesUpload={(file) => handleUpload("sales", file)}
+              onTimesheetUpload={(file) => handleUpload("timesheet", file)}
+              onCalculate={handleCalculate}
+              onReset={handleReset}
+            />
+            {result && hasErrors ? <ValidationPanel issues={result.issues} /> : null}
           </>
-        ) : null}
-
-        <WorkflowGrid
-          salesUpload={salesUpload}
-          timesheetUpload={timesheetUpload}
-          uploadsReady={uploadsReady}
-          canCalculate={canCalculate}
-          blockingUploadError={blockingUploadError}
-          result={result}
-          onSalesUpload={(file) => handleUpload("sales", file)}
-          onTimesheetUpload={(file) => handleUpload("timesheet", file)}
-          onCalculate={handleCalculate}
-          onReset={handleReset}
-        />
-
-        {result ? (
-          <>
-            {hasErrors ? <ValidationPanel issues={result.issues} /> : null}
-            {!hasErrors ? (
-              <>
-                <EdgeCasePanel result={result} />
-                <EmployeeTable result={result} />
-                <UnallocatedOrders result={result} />
-              </>
-            ) : null}
-          </>
+        ) : activeView === "dashboard" ? (
+          <DashboardView result={result} />
+        ) : activeView === "tips" ? (
+          <TipsView result={result} />
         ) : (
-          <EmptyState
-            salesUpload={salesUpload}
-            timesheetUpload={timesheetUpload}
-            uploadsReady={uploadsReady}
-          />
+          <SettingsView />
         )}
       </main>
     </div>
   );
 }
 
-function AppSidebar() {
-  const navItems = [
-    { label: "Dashboard", icon: ChartPie, active: true },
-    { label: "Payouts", icon: WalletCards },
-    { label: "Employees", icon: Users },
-    { label: "Reports", icon: FileText },
-    { label: "Settings", icon: Settings }
+function AppSidebar({
+  activeView,
+  onViewChange
+}: {
+  activeView: AppView;
+  onViewChange: (view: AppView) => void;
+}) {
+  const navItems: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
+    { id: "dashboard", label: "Dashboard", icon: ChartPie },
+    { id: "tips", label: "Tips", icon: WalletCards },
+    { id: "settings", label: "Settings", icon: Settings }
   ];
 
   return (
     <aside className="app-sidebar" aria-label="Application navigation">
       <div className="brand-lockup">
-        <span className="brand-mark">FT</span>
+        <span className="brand-mark">SF</span>
         <span>
-          <strong>Fair Tips</strong>
-          <small>Tip Distribution</small>
+          <strong>ShiftFlow</strong>
+          <small>Operations</small>
         </span>
       </div>
 
@@ -206,29 +200,36 @@ function AppSidebar() {
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
-            <a className={item.active ? "active" : ""} href="#" key={item.label}>
+            <button
+              className={activeView === item.id ? "active" : ""}
+              type="button"
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+            >
               <Icon aria-hidden="true" size={19} />
               <span>{item.label}</span>
-            </a>
+            </button>
           );
         })}
       </nav>
 
       <div className="sidebar-support">
         <CircleHelp aria-hidden="true" size={18} />
-        <strong>Need help?</strong>
-        <span>Review uploads, payouts, and employee tips before export.</span>
+        <strong>Review week</strong>
+        <span>Check sales metrics, tip allocation, and unallocated orders before export.</span>
       </div>
     </aside>
   );
 }
 
 function DashboardHeader({
+  title,
   result,
   hasErrors,
   onLock,
   onExport
 }: {
+  title: string;
   result: CalculationResult | null;
   hasErrors: boolean;
   onLock: () => void;
@@ -238,7 +239,7 @@ function DashboardHeader({
     <section className="dashboard-header">
       <div className="dashboard-title">
         <div className="title-row">
-          <h1>Weekly tip payout</h1>
+          <h1>{title}</h1>
           <span className={result && !hasErrors ? "review-pill ready" : "review-pill"}>
             {result && !hasErrors ? "Ready to review" : "Setup required"}
           </span>
@@ -246,19 +247,10 @@ function DashboardHeader({
         <div className="period-control" aria-label="Pay period">
           <CalendarDays aria-hidden="true" size={17} />
           <span>{result ? formatDateRange(result) : "Current pay period"}</span>
-          <button aria-label="Previous period" type="button">
-            <ChevronLeft aria-hidden="true" size={17} />
-          </button>
-          <button aria-label="Next period" type="button">
-            <ChevronRight aria-hidden="true" size={17} />
-          </button>
         </div>
       </div>
 
       <div className="dashboard-actions">
-        <button className="icon-button" aria-label="Notifications" type="button">
-          <Bell aria-hidden="true" size={18} />
-        </button>
         <button className="secondary-button compact" type="button" onClick={onLock}>
           <LockKeyhole aria-hidden="true" size={17} />
           Lock week
@@ -277,6 +269,47 @@ function DashboardHeader({
   );
 }
 
+function DashboardView({ result }: { result: CalculationResult }) {
+  return (
+    <div className="view-stack">
+      <ExecutiveMetrics result={result} />
+      <InsightGrid result={result} />
+    </div>
+  );
+}
+
+function TipsView({ result }: { result: CalculationResult }) {
+  return (
+    <div className="view-stack">
+      <TipSummaryStrip result={result} />
+      <EdgeCasePanel result={result} />
+      <EmployeeTable result={result} />
+      <UnallocatedOrders result={result} />
+    </div>
+  );
+}
+
+function SettingsView() {
+  return (
+    <section className="panel-card settings-panel">
+      <div className="panel-heading">
+        <h2>Settings</h2>
+        <span>Current workspace</span>
+      </div>
+      <div className="settings-list">
+        <div>
+          <strong>Exports</strong>
+          <span>Excel payout files use the latest validated calculation.</span>
+        </div>
+        <div>
+          <strong>Access</strong>
+          <span>The manager password is controlled by the local environment.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ExecutiveMetrics({ result }: { result: CalculationResult }) {
   const laborPercent =
     result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
@@ -284,14 +317,14 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
     result.metrics.netSales === 0
       ? "0%"
       : formatPercent(result.metrics.totalAllocatedTips / result.metrics.netSales);
-  const unallocatedPercent =
-    result.metrics.totalTips + result.metrics.eventTips === 0
-      ? "0%"
-      : formatPercent(
-          result.metrics.totalUnallocatedTips /
-            (result.metrics.totalTips + result.metrics.eventTips)
-        );
-  const kpis = [
+  const kpis: Array<{
+    label: string;
+    value: string;
+    detail: string;
+    icon: LucideIcon;
+    featured?: boolean;
+    warning?: boolean;
+  }> = [
     {
       label: "Net Sales",
       value: formatCurrency(result.metrics.netSales),
@@ -310,19 +343,6 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
       detail: `${payoutPercent} of net sales`,
       icon: WalletCards,
       featured: true
-    },
-    {
-      label: "Unallocated",
-      value: formatCurrency(result.metrics.totalUnallocatedTips),
-      detail: `${unallocatedPercent} of tips`,
-      icon: AlertTriangle,
-      warning: result.metrics.totalUnallocatedTips > 0
-    },
-    {
-      label: "Employees",
-      value: String(result.metrics.employeesFound),
-      detail: `${formatNumber(result.metrics.totalPaidHours)} total hours`,
-      icon: Users
     }
   ];
 
@@ -470,7 +490,7 @@ function BreakdownCard({
 }: {
   title: string;
   total: number;
-  icon: typeof Truck;
+  icon: LucideIcon;
   rows: Array<[string, number]>;
   footer: string;
 }) {
@@ -498,7 +518,7 @@ function BreakdownCard({
   );
 }
 
-function WorkflowGrid({
+function ReportSetupPanel({
   salesUpload,
   timesheetUpload,
   uploadsReady,
@@ -521,128 +541,69 @@ function WorkflowGrid({
   onCalculate: () => void;
   onReset: () => void;
 }) {
-  return (
-    <section className="workflow-grid" aria-label="Upload and payout workflow">
-      <section className="panel-card upload-validate-card">
-        <div className="panel-heading">
-          <h2>Upload & validate</h2>
-          <div className="step-tabs" aria-label="Workflow steps">
-            <span className="active">1 Upload</span>
-            <span className={uploadsReady ? "active" : ""}>2 Validate</span>
-            <span className={result ? "active" : ""}>3 Review</span>
-            <span>4 Payout</span>
-          </div>
-        </div>
-        <div className="upload-row">
-          <UploadPanel
-            title="Sales report"
-            upload={salesUpload}
-            onUpload={onSalesUpload}
-          />
-          <UploadPanel
-            title="Timesheet report"
-            upload={timesheetUpload}
-            onUpload={onTimesheetUpload}
-          />
-        </div>
-        <div className="workflow-footer">
-          <ValidationSnapshot result={result} uploadsReady={uploadsReady} />
-          <div className="workflow-actions">
-            <button
-              className="primary-button"
-              type="button"
-              disabled={!canCalculate || blockingUploadError}
-              onClick={onCalculate}
-            >
-              <Calculator aria-hidden="true" size={18} />
-              Calculate tips
-            </button>
-            <button className="secondary-button" type="button" onClick={onReset}>
-              <RotateCcw aria-hidden="true" size={17} />
-              Reset
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <PayoutProgress result={result} uploadsReady={uploadsReady} />
-    </section>
-  );
-}
-
-function ValidationSnapshot({
-  result,
-  uploadsReady
-}: {
-  result: CalculationResult | null;
-  uploadsReady: boolean;
-}) {
-  if (!result) {
-    return (
-      <div className="validation-snapshot">
-        <Upload aria-hidden="true" size={18} />
-        <span>{uploadsReady ? "Reports ready to calculate" : "Waiting for both reports"}</span>
-      </div>
-    );
-  }
-
-  const errors = result.issues.filter((issue) => issue.severity === "error").length;
-  const warnings = result.issues.filter((issue) => issue.severity === "warning").length;
+  const errors = result?.issues.filter((issue) => issue.severity === "error").length ?? 0;
+  const warnings = result?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
+  const setupMessage = result
+    ? errors
+      ? `${errors} blocking issue${errors === 1 ? "" : "s"} found`
+      : `${warnings} warning${warnings === 1 ? "" : "s"} found`
+    : uploadsReady
+      ? "Reports ready to calculate"
+      : "Upload both reports to begin";
 
   return (
-    <div className={errors ? "validation-snapshot error" : "validation-snapshot ready"}>
-      {errors ? (
-        <AlertTriangle aria-hidden="true" size={18} />
-      ) : (
-        <CheckCircle2 aria-hidden="true" size={18} />
-      )}
-      <span>
-        {errors ? `${errors} errors` : "Validation complete"}
-        <small>
-          {errors} errors, {warnings} warnings
-        </small>
-      </span>
-    </div>
-  );
-}
-
-function PayoutProgress({
-  result,
-  uploadsReady
-}: {
-  result: CalculationResult | null;
-  uploadsReady: boolean;
-}) {
-  const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
-  const steps = [
-    { label: "Data uploaded", status: uploadsReady ? "done" : "pending" },
-    { label: "Validated", status: result && !hasErrors ? "done" : result ? "issue" : "pending" },
-    { label: "Under review", status: result && !hasErrors ? "current" : "pending" },
-    { label: "Payout ready", status: "pending" }
-  ];
-
-  return (
-    <section className="panel-card payout-progress-card">
+    <section className="panel-card setup-panel" aria-label="Report setup">
       <div className="panel-heading">
-        <h2>Payout progress</h2>
-        <span>{result && !hasErrors ? "In progress" : "Pending"}</span>
+        <div>
+          <h2>Reports</h2>
+          <span>{setupMessage}</span>
+        </div>
+        <span className={uploadsReady ? "setup-state ready" : "setup-state"}>
+          {uploadsReady ? "Ready" : "Waiting"}
+        </span>
       </div>
-      <div className="progress-track">
-        {steps.map((step, index) => (
-          <div className={`progress-step ${step.status}`} key={step.label}>
-            <span>{step.status === "done" ? <Check aria-hidden="true" size={15} /> : index + 1}</span>
-            <strong>{step.label}</strong>
-            <small>
-              {step.status === "done"
-                ? "Complete"
-                : step.status === "current"
-                  ? "Review now"
-                  : step.status === "issue"
-                    ? "Needs fixes"
-                    : "Pending"}
-            </small>
-          </div>
-        ))}
+      <div className="upload-row">
+        <UploadPanel title="Sales report" upload={salesUpload} onUpload={onSalesUpload} />
+        <UploadPanel
+          title="Timesheet report"
+          upload={timesheetUpload}
+          onUpload={onTimesheetUpload}
+        />
+      </div>
+      <div className="setup-footer">
+        <div className={result && errors ? "setup-validation error" : "setup-validation"}>
+          {result && errors ? (
+            <AlertTriangle aria-hidden="true" size={18} />
+          ) : uploadsReady ? (
+            <CheckCircle2 aria-hidden="true" size={18} />
+          ) : (
+            <Upload aria-hidden="true" size={18} />
+          )}
+          <span>
+            {blockingUploadError
+              ? "Fix the upload issue before calculating."
+              : result
+                ? `${errors} errors, ${warnings} warnings`
+                : uploadsReady
+                  ? "Run calculation to preview the dashboard and tips."
+                  : "Waiting for the sales and timesheet reports."}
+          </span>
+        </div>
+        <div className="setup-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!canCalculate || blockingUploadError}
+            onClick={onCalculate}
+          >
+            <Calculator aria-hidden="true" size={18} />
+            Calculate tips
+          </button>
+          <button className="secondary-button" type="button" onClick={onReset}>
+            <RotateCcw aria-hidden="true" size={17} />
+            Reset
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -688,10 +649,10 @@ function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
           <ShieldCheck aria-hidden="true" size={24} />
         </span>
         <div>
-          <p className="eyebrow">Fair Tips</p>
+          <p className="eyebrow">ShiftFlow</p>
           <h1>Manager access</h1>
           <p className="access-copy">
-            Enter the app password to open the tip distribution dashboard.
+            Enter the app password to open the business dashboard.
           </p>
         </div>
         <form className="password-form" onSubmit={handleSubmit}>
@@ -756,45 +717,65 @@ function UploadPanel({
   );
 }
 
-function EmptyState({
-  salesUpload,
-  timesheetUpload,
-  uploadsReady
-}: {
-  salesUpload: UploadState;
-  timesheetUpload: UploadState;
-  uploadsReady: boolean;
-}) {
-  const waitingForSales = salesUpload.status === "idle";
-  const waitingForTimesheet = timesheetUpload.status === "idle";
-  const title = uploadsReady
-    ? "Reports are ready"
-    : waitingForSales && waitingForTimesheet
-      ? "Ready for reports"
-      : "One more report needed";
-  const message = uploadsReady
-    ? "Run the calculation to preview payouts before exporting."
-    : waitingForSales && waitingForTimesheet
-      ? "Upload the sales report and timesheet report to begin."
-      : waitingForSales
-        ? "Waiting for the sales report."
-        : waitingForTimesheet
-          ? "Waiting for the timesheet report."
-          : "Fix the upload issue above, then calculate again.";
+function TipSummaryStrip({ result }: { result: CalculationResult }) {
+  const tipPool = result.metrics.totalTips + result.metrics.eventTips;
+  const unallocatedPercent =
+    tipPool === 0 ? "0%" : formatPercent(result.metrics.totalUnallocatedTips / tipPool);
+  const cards = [
+    {
+      label: "Store Tips",
+      value: formatCurrency(result.metrics.allocatedTips),
+      detail: `${formatCurrency(result.metrics.totalTips)} store pool`,
+      icon: CircleDollarSign
+    },
+    {
+      label: "Event Tips",
+      value: formatCurrency(result.metrics.eventAllocatedTips),
+      detail: `${formatCurrency(result.metrics.eventTips)} event pool`,
+      icon: WalletCards
+    },
+    {
+      label: "Total Payout",
+      value: formatCurrency(result.metrics.totalAllocatedTips),
+      detail: `${result.metrics.employeesFound} employees`,
+      icon: Users,
+      featured: true
+    },
+    {
+      label: "Unallocated",
+      value: formatCurrency(result.metrics.totalUnallocatedTips),
+      detail: `${unallocatedPercent} of tips`,
+      icon: AlertTriangle,
+      warning: result.metrics.totalUnallocatedTips > 0
+    }
+  ];
 
   return (
-    <section className="empty-panel">
-      <span className={uploadsReady ? "empty-icon ready" : "empty-icon"}>
-        {uploadsReady ? (
-          <FileCheck2 aria-hidden="true" size={22} />
-        ) : (
-          <FileSpreadsheet aria-hidden="true" size={22} />
-        )}
-      </span>
-      <span>
-        <strong>{title}</strong>
-        <small>{message}</small>
-      </span>
+    <section className="tip-summary-grid" aria-label="Tip allocation totals">
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <div
+            className={[
+              "tip-summary-card",
+              card.featured ? "featured" : "",
+              card.warning ? "warning" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            key={card.label}
+          >
+            <span className="tip-summary-icon">
+              <Icon aria-hidden="true" size={20} />
+            </span>
+            <span>
+              <small>{card.label}</small>
+              <strong>{card.value}</strong>
+              <em>{card.detail}</em>
+            </span>
+          </div>
+        );
+      })}
     </section>
   );
 }

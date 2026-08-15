@@ -128,20 +128,23 @@ h2 {
   gap: 8px;
 }
 
-.sidebar-nav a {
+.sidebar-nav button {
   display: flex;
   align-items: center;
   gap: 11px;
   min-height: 44px;
+  width: 100%;
   padding: 0 12px;
   border-radius: 8px;
+  background: transparent;
   color: rgba(236, 248, 243, 0.82);
   font-weight: 720;
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
 
-.sidebar-nav a.active,
-.sidebar-nav a:hover {
+.sidebar-nav button.active,
+.sidebar-nav button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
 }
@@ -318,10 +321,10 @@ h2 {
 .panel-card,
 .executive-card,
 .upload-panel,
-.empty-panel,
 .validation-panel,
 .notice-panel,
-.table-panel {
+.table-panel,
+.tip-summary-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -330,7 +333,7 @@ h2 {
 
 .executive-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -339,7 +342,9 @@ h2 {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 12px;
+  min-width: 0;
   min-height: 154px;
+  overflow: hidden;
   padding: 20px;
 }
 
@@ -388,8 +393,11 @@ h2 {
 
 .executive-card strong {
   align-self: end;
-  font-size: 1.72rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.28rem, 2vw, 1.72rem);
   font-weight: 920;
+  font-variant-numeric: tabular-nums;
   line-height: 1.05;
 }
 
@@ -400,7 +408,7 @@ h2 {
 
 .insight-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 1.45fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(340px, 1.35fr) repeat(3, minmax(210px, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -417,7 +425,14 @@ h2 {
   margin-bottom: 16px;
 }
 
+.panel-heading > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .panel-heading span {
+  min-width: 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -452,9 +467,10 @@ h2 {
 
 .mix-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) auto 56px;
+  grid-template-columns: minmax(120px, 1fr) minmax(112px, max-content) minmax(62px, max-content);
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
@@ -470,6 +486,7 @@ h2 {
   gap: 8px;
   min-width: 0;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .mix-row i {
@@ -495,7 +512,10 @@ h2 {
 }
 
 .mix-row strong {
+  min-width: 0;
+  text-align: right;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .mix-row small {
@@ -507,12 +527,14 @@ h2 {
   display: grid;
   align-content: start;
   gap: 14px;
+  min-width: 0;
 }
 
 .breakdown-title {
   display: flex;
   gap: 12px;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .breakdown-icon {
@@ -528,10 +550,14 @@ h2 {
 .breakdown-title div {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .breakdown-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 1.12rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .breakdown-rows {
@@ -544,6 +570,7 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -560,27 +587,30 @@ h2 {
   color: var(--ink-soft);
 }
 
-.workflow-grid {
+.view-stack,
+.settings-list {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
-  gap: 14px;
+  gap: 18px;
+}
+
+.setup-panel {
   margin-bottom: 18px;
 }
 
-.step-tabs {
-  display: flex;
+.setup-state {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-strong);
   color: var(--muted);
-  font-size: 0.84rem;
-  font-weight: 780;
+  font-weight: 850;
 }
 
-.step-tabs span {
-  color: var(--muted);
-}
-
-.step-tabs span.active {
+.setup-state.ready {
+  background: var(--accent-soft);
   color: var(--accent-dark);
 }
 
@@ -631,8 +661,7 @@ h2 {
   border-color: rgba(179, 52, 43, 0.38);
 }
 
-.icon-frame,
-.empty-icon {
+.icon-frame {
   display: grid;
   width: 38px;
   height: 38px;
@@ -642,8 +671,7 @@ h2 {
   color: var(--info);
 }
 
-.upload-panel.ready .icon-frame,
-.empty-icon.ready {
+.upload-panel.ready .icon-frame {
   background: var(--accent-soft);
   color: var(--accent-dark);
 }
@@ -681,7 +709,7 @@ h2 {
   white-space: nowrap;
 }
 
-.workflow-footer {
+.setup-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -691,12 +719,12 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
-.workflow-actions {
+.setup-actions {
   display: flex;
   gap: 9px;
 }
 
-.validation-snapshot {
+.setup-validation {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -704,91 +732,87 @@ h2 {
   font-weight: 780;
 }
 
-.validation-snapshot span {
-  display: grid;
-  gap: 2px;
+.setup-validation svg {
+  flex: 0 0 auto;
 }
 
-.validation-snapshot small {
-  color: var(--muted);
-  font-weight: 650;
-}
-
-.validation-snapshot.ready {
+.setup-validation:not(.error) {
   color: var(--accent-dark);
 }
 
-.validation-snapshot.error {
+.setup-validation.error {
   color: var(--danger);
 }
 
-.payout-progress-card {
-  display: grid;
-  align-content: start;
-}
-
-.progress-track {
-  position: relative;
+.tip-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.tip-summary-card {
+  display: flex;
+  align-items: flex-start;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px;
 }
 
-.progress-track::before {
-  position: absolute;
-  top: 17px;
-  right: 8%;
-  left: 8%;
-  height: 2px;
-  background: var(--line);
-  content: "";
-}
-
-.progress-step {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  gap: 7px;
-  text-align: center;
-}
-
-.progress-step > span {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 900;
-}
-
-.progress-step.done > span {
-  border-color: var(--accent);
-  background: var(--accent);
+.tip-summary-card.featured {
+  background: linear-gradient(145deg, #0d8069 0%, #06483d 100%);
   color: #ffffff;
 }
 
-.progress-step.current > span {
-  border-color: var(--accent);
+.tip-summary-card.warning {
+  border-color: rgba(168, 93, 9, 0.26);
+}
+
+.tip-summary-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
   color: var(--accent-dark);
 }
 
-.progress-step.issue > span {
-  border-color: var(--danger);
-  color: var(--danger);
+.tip-summary-card.featured .tip-summary-icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
-.progress-step strong {
-  font-size: 0.88rem;
+.tip-summary-card.warning .tip-summary-icon {
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
-.progress-step small {
+.tip-summary-card > span:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tip-summary-card small,
+.tip-summary-card em {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
+  font-style: normal;
+}
+
+.tip-summary-card strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.1rem, 1.6vw, 1.34rem);
+  font-weight: 920;
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-summary-card.featured small,
+.tip-summary-card.featured em {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .notice-panel {
@@ -809,28 +833,6 @@ h2 {
   border-color: rgba(168, 93, 9, 0.24);
   background: var(--warning-soft);
   color: var(--warning);
-}
-
-.empty-panel {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-height: 104px;
-  padding: 22px;
-}
-
-.empty-panel > span:last-child {
-  display: grid;
-  gap: 3px;
-}
-
-.empty-panel strong {
-  font-size: 1rem;
-}
-
-.empty-panel small {
-  color: var(--muted);
-  font-size: 0.92rem;
 }
 
 .validation-panel,
@@ -1207,11 +1209,24 @@ tfoot td {
 
   .app-sidebar {
     position: static;
+    display: grid;
+    gap: 14px;
     min-height: auto;
     padding: 16px 18px;
   }
 
-  .sidebar-nav,
+  .sidebar-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .sidebar-nav button {
+    width: auto;
+    min-width: max-content;
+    padding-right: 14px;
+  }
+
   .sidebar-support {
     display: none;
   }
@@ -1225,24 +1240,24 @@ tfoot td {
   }
 
   .dashboard-header,
-  .workflow-footer,
+  .setup-footer,
   .section-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .dashboard-actions,
-  .workflow-actions {
+  .setup-actions {
     width: 100%;
   }
 
   .dashboard-actions > button,
-  .workflow-actions > button {
+  .setup-actions > button {
     flex: 1;
   }
 
-  .workflow-grid {
-    grid-template-columns: 1fr;
+  .tip-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sales-mix-body {
@@ -1268,7 +1283,8 @@ tfoot td {
 
   .executive-grid,
   .insight-grid,
-  .upload-row {
+  .upload-row,
+  .tip-summary-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1386,26 +1402,19 @@ tfoot td {
   }
 
   .dashboard-actions,
-  .workflow-actions {
+  .setup-actions {
     flex-direction: column;
   }
 
   .dashboard-actions > button,
-  .workflow-actions > button {
+  .setup-actions > button {
     width: 100%;
   }
 
   .panel-card,
   .table-panel,
-  .validation-panel {
+  .validation-panel,
+  .tip-summary-card {
     padding: 14px;
-  }
-
-  .progress-track {
-    grid-template-columns: 1fr;
-  }
-
-  .progress-track::before {
-    display: none;
   }
 }
