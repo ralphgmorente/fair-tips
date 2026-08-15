@@ -408,13 +408,19 @@ h2 {
 
 .insight-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 1.35fr) repeat(3, minmax(210px, 1fr));
+  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
 
 .panel-card {
   padding: 18px;
+}
+
+.sales-mix-card {
+  container-type: inline-size;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .panel-heading {
@@ -439,17 +445,19 @@ h2 {
 
 .sales-mix-body {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-columns: minmax(118px, 150px) minmax(0, 1fr);
   align-items: center;
   gap: 22px;
+  min-width: 0;
 }
 
 .donut-chart {
   display: grid;
-  width: 142px;
+  width: min(142px, 100%);
   aspect-ratio: 1;
   place-items: center;
   border-radius: 50%;
+  justify-self: center;
 }
 
 .donut-chart span {
@@ -467,7 +475,7 @@ h2 {
 
 .mix-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(112px, max-content) minmax(62px, max-content);
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 16rem);
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -480,7 +488,7 @@ h2 {
   border-bottom: 0;
 }
 
-.mix-row span {
+.mix-label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -489,7 +497,13 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.mix-label span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .mix-row i {
+  flex: 0 0 auto;
   width: 9px;
   height: 9px;
   border-radius: 50%;
@@ -511,16 +525,29 @@ h2 {
   background: #edf2ee;
 }
 
-.mix-row strong {
+.mix-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(4.4rem, max-content);
+  gap: 12px;
+  align-items: baseline;
+  justify-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mix-values strong {
   min-width: 0;
   text-align: right;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+  line-height: 1.12;
 }
 
-.mix-row small {
+.mix-values small {
   color: var(--muted);
   text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .breakdown-card {
@@ -1262,6 +1289,32 @@ tfoot td {
 
   .sales-mix-body {
     grid-template-columns: 130px minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 520px) {
+  .sales-mix-body {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .mix-list {
+    width: 100%;
+  }
+
+  .mix-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .mix-values {
+    grid-template-columns: minmax(0, 1fr) minmax(4.4rem, max-content);
+    width: 100%;
+  }
+
+  .mix-values strong {
+    text-align: left;
   }
 }
 

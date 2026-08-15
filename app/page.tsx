@@ -25,7 +25,6 @@ import {
   WalletCards
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { exportTipWorkbook } from "@/lib/export-results";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateTipDistribution,
@@ -33,6 +32,7 @@ import {
   formatDateTime,
   formatNumber,
   formatPercent,
+  roundMoney,
   type CalculationResult,
   type Grid,
   type ValidationIssue
@@ -129,6 +129,15 @@ export default function Home() {
     setResult(null);
   }
 
+  async function handleExport() {
+    if (!result || hasErrors) {
+      return;
+    }
+
+    const { exportTipWorkbook } = await import("@/lib/export-results");
+    exportTipWorkbook(result);
+  }
+
   if (!isUnlocked) {
     return <PasswordGate onUnlock={handleUnlock} />;
   }
@@ -142,7 +151,7 @@ export default function Home() {
           result={result}
           hasErrors={hasErrors}
           onLock={handleLock}
-          onExport={() => result && exportTipWorkbook(result)}
+          onExport={handleExport}
         />
 
         {showReportSetup ? (
@@ -421,7 +430,7 @@ function SalesMixCard({ result }: { result: CalculationResult }) {
     result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
   const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
   const knownTotal = deliveryTotal + result.metrics.creditDebitSales + cashGiftTotal;
-  const otherTotal = Math.max(0, result.metrics.netSales - knownTotal);
+  const otherTotal = roundMoney(Math.max(0, result.metrics.netSales - knownTotal));
   const total = Math.max(1, result.metrics.netSales || knownTotal);
   const deliveryEnd = safeRatio(deliveryTotal, total) * 100;
   const creditEnd = deliveryEnd + safeRatio(result.metrics.creditDebitSales, total) * 100;
@@ -471,12 +480,14 @@ function MixRow({
 }) {
   return (
     <div className="mix-row">
-      <span>
+      <span className="mix-label">
         <i data-tone={tone} />
-        {label}
+        <span>{label}</span>
       </span>
-      <strong>{formatCurrency(value)}</strong>
-      <small>{formatPercent(safeRatio(value, total))}</small>
+      <span className="mix-values">
+        <strong>{formatCurrency(value)}</strong>
+        <small>{formatPercent(safeRatio(value, total))}</small>
+      </span>
     </div>
   );
 }
