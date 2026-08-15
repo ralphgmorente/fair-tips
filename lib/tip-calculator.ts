@@ -123,6 +123,10 @@ export type CalculationCapabilities = {
   hasSalesData: boolean;
   hasPaymentBreakdown: boolean;
   hasItemDetails: boolean;
+  hasGrossSalesExcludingTax: boolean;
+  hasTaxData: boolean;
+  hasDiscountData: boolean;
+  hasRefundData: boolean;
   hasTimesheet: boolean;
   hasValidShifts: boolean;
   hasLaborCost: boolean;
@@ -300,10 +304,18 @@ type HeaderLookup = Record<string, number | undefined>;
 type ParsedSales = {
   orders: SalesOrder[];
   issues: ValidationIssue[];
+  fields: SalesFieldAvailability;
 };
 
 type ParsedSalesSource = ParsedSales & {
   kind: BusinessReportKind | "none";
+};
+
+type SalesFieldAvailability = {
+  grossSales: boolean;
+  tax: boolean;
+  discounts: boolean;
+  refunds: boolean;
 };
 
 type ParsedBusinessReports = {
@@ -337,7 +349,7 @@ export function calculateFlexibleReports({
 }: FlexibleReportInput): CalculationResult {
   const parsedReports = parseUploadedBusinessReports(ordersGrid, paymentsGrid);
   const parsedTimesheet = timesheetGrid ? parseTimesheetReport(timesheetGrid) : emptyParsedTimesheet();
-  const parsedSales = chooseSalesSource(parsedReports.orders.orders, parsedReports.payments.orders);
+  const parsedSales = chooseSalesSource(parsedReports.orders, parsedReports.payments);
   const paymentSourceOrders =
     parsedReports.payments.orders.length > 0 ? parsedReports.payments.orders : parsedSales.orders;
   const issues = [
@@ -490,6 +502,9 @@ export function calculateFlexibleReports({
   const hasItemDetails = parsedSales.orders.some(
     (order) => order.itemName && order.itemQuantity !== null && order.itemSales !== null
   );
+  const hasGrossSalesExcludingTax = Boolean(
+    parsedSales.orders.length > 0 && parsedSales.fields.grossSales && parsedSales.fields.tax
+  );
   const hasLaborCost = Boolean(timesheetGrid && totalLaborCost > 0);
 
   const metrics: SummaryMetrics = {
@@ -574,6 +589,10 @@ export function calculateFlexibleReports({
       hasSalesData: parsedSales.orders.length > 0,
       hasPaymentBreakdown,
       hasItemDetails,
+      hasGrossSalesExcludingTax,
+      hasTaxData: parsedSales.fields.tax,
+      hasDiscountData: parsedSales.fields.discounts,
+      hasRefundData: parsedSales.fields.refunds,
       hasTimesheet: Boolean(timesheetGrid),
       hasValidShifts: validShifts.length > 0,
       hasLaborCost,
@@ -658,25 +677,35 @@ function addUploadedBusinessReport(
   const parsed = parseSalesReport(grid);
   target.orders = parsed.orders;
   target.issues = parsed.issues;
+  target.fields = parsed.fields;
 }
 
 function chooseSalesSource(
-  orderRows: SalesOrder[],
-  paymentRows: SalesOrder[]
+  orderReport: ParsedSales,
+  paymentReport: ParsedSales
 ): ParsedSalesSource {
-  if (orderRows.length > 0) {
-    return { kind: "orders", orders: orderRows, issues: [] };
+  if (orderReport.orders.length > 0) {
+    return { ...orderReport, kind: "orders", issues: [] };
   }
 
-  if (paymentRows.length > 0) {
-    return { kind: "payments", orders: paymentRows, issues: [] };
+  if (paymentReport.orders.length > 0) {
+    return { ...paymentReport, kind: "payments", issues: [] };
   }
 
-  return { kind: "none", orders: [], issues: [] };
+  return { kind: "none", orders: [], issues: [], fields: emptySalesFields() };
 }
 
 function emptyParsedSales(): ParsedSales {
-  return { orders: [], issues: [] };
+  return { orders: [], issues: [], fields: emptySalesFields() };
+}
+
+function emptySalesFields(): SalesFieldAvailability {
+  return {
+    grossSales: false,
+    tax: false,
+    discounts: false,
+    refunds: false
+  };
 }
 
 function emptyParsedTimesheet(): ParsedTimesheet {
@@ -712,6 +741,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   if (!header) {
     return {
       orders: [],
+      fields: emptySalesFields(),
       issues: [
         {
           severity: "error",
@@ -747,6 +777,12 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const itemNameIndex = findColumn(header.lookup, ITEM_NAME_HEADERS)?.index;
   const itemQuantityIndex = findColumn(header.lookup, ITEM_QUANTITY_HEADERS)?.index;
   const itemSalesIndex = findColumn(header.lookup, ITEM_SALES_HEADERS)?.index;
+  const fields: SalesFieldAvailability = {
+    grossSales: Boolean(grossSalesColumn || orderTotalColumn),
+    tax: taxIndexes.length > 0,
+    discounts: discountIndexes.length > 0,
+    refunds: refundIndexes.length > 0
+  };
   const orders: SalesOrder[] = [];
   const seenOrderIds = new Set<string>();
   let skippedFailedPayments = 0;
@@ -891,7 +927,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
     });
   }
 
-  return { orders, issues };
+  return { orders, issues, fields };
 }
 
 export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
@@ -1070,6 +1106,10 @@ function emptyResult(
       hasSalesData: salesOrders.length > 0,
       hasPaymentBreakdown: false,
       hasItemDetails: false,
+      hasGrossSalesExcludingTax: false,
+      hasTaxData: false,
+      hasDiscountData: false,
+      hasRefundData: false,
       hasTimesheet: reports.hasTimesheet,
       hasValidShifts: shifts.some((shift) => shift.valid),
       hasLaborCost: shifts.some((shift) => shift.laborCost > 0),

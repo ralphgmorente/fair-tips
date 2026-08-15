@@ -330,17 +330,17 @@ function DashboardView({ result }: { result: CalculationResult }) {
   return (
     <div className="view-stack">
       <ExecutiveMetrics result={result} />
-      <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <InsightGrid result={result} />
       <div className="analytics-grid">
         <SalesByHourCard hourlySales={hourlySales} />
         <DailySalesTrendCard dailySales={dailySales} />
       </div>
+      <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <div className="business-dashboard-grid">
-        <BusinessHealthCard result={result} averageTicket={averageTicket} />
         <TopSellingItemsCard items={topSellingItems} />
+        <BusinessInsightsCard insights={businessInsights} />
       </div>
-      <BusinessInsightsCard insights={businessInsights} />
+      <BusinessHealthCard result={result} averageTicket={averageTicket} />
     </div>
   );
 }
@@ -424,7 +424,13 @@ function SettingsView() {
 }
 
 function ExecutiveMetrics({ result }: { result: CalculationResult }) {
-  const grossSales = result.salesOrders.reduce((total, order) => total + order.grossSales, 0);
+  const taxTotal = result.salesOrders.reduce((total, order) => total + order.taxes, 0);
+  const discountTotal = result.salesOrders.reduce((total, order) => total + order.discounts, 0);
+  const refundTotal = result.salesOrders.reduce((total, order) => total + order.refunds, 0);
+  const grossSalesExcludingTax = result.salesOrders.reduce(
+    (total, order) => total + order.grossSales - order.taxes,
+    0
+  );
   const laborValue = result.capabilities.hasLaborCost
     ? formatPercent(result.metrics.laborPercent)
     : result.capabilities.hasTimesheet
@@ -442,12 +448,37 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
     icon: LucideIcon;
     featured?: boolean;
     warning?: boolean;
+    secondaryRows?: Array<{ label: string; value: string; unavailable?: boolean }>;
   }> = [
     {
       label: "Gross Sales",
-      value: formatCurrency(grossSales),
-      detail: "Clover sales before adjustments",
-      icon: CircleDollarSign
+      value: result.capabilities.hasGrossSalesExcludingTax
+        ? formatCurrency(grossSalesExcludingTax)
+        : "Data unavailable",
+      detail: "Sales excluding sales tax",
+      icon: CircleDollarSign,
+      warning: !result.capabilities.hasGrossSalesExcludingTax,
+      secondaryRows: [
+        {
+          label: "Tax",
+          value: result.capabilities.hasTaxData ? formatCurrency(taxTotal) : "Data unavailable",
+          unavailable: !result.capabilities.hasTaxData
+        },
+        {
+          label: "Discounts",
+          value: result.capabilities.hasDiscountData
+            ? formatCurrency(discountTotal)
+            : "Data unavailable",
+          unavailable: !result.capabilities.hasDiscountData
+        },
+        {
+          label: "Refunds",
+          value: result.capabilities.hasRefundData
+            ? formatCurrency(refundTotal)
+            : "Data unavailable",
+          unavailable: !result.capabilities.hasRefundData
+        }
+      ]
     },
     {
       label: "Net Sales",
@@ -473,7 +504,8 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
             className={[
               "executive-card",
               kpi.featured ? "featured" : "",
-              kpi.warning ? "warning" : ""
+              kpi.warning ? "warning" : "",
+              kpi.secondaryRows ? "has-secondary" : ""
             ]
               .filter(Boolean)
               .join(" ")}
@@ -485,6 +517,16 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
             <span className="executive-label">{kpi.label}</span>
             <strong>{kpi.value}</strong>
             <small>{kpi.detail}</small>
+            {kpi.secondaryRows ? (
+              <div className="executive-secondary-grid">
+                {kpi.secondaryRows.map((row) => (
+                  <span className={row.unavailable ? "unavailable" : ""} key={row.label}>
+                    <small>{row.label}</small>
+                    <strong>{row.value}</strong>
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         );
       })}
