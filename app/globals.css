@@ -335,22 +335,22 @@ h2 {
 .executive-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 16px;
 }
 
 .executive-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px 12px;
+  align-content: start;
+  gap: 10px 14px;
   min-width: 0;
-  min-height: 154px;
+  min-height: 174px;
   overflow: hidden;
-  padding: 20px;
+  padding: 21px;
 }
 
 .executive-card.has-secondary {
-  min-height: 190px;
+  min-height: 206px;
 }
 
 .executive-card.featured {
@@ -368,8 +368,8 @@ h2 {
 .executive-icon {
   display: grid;
   grid-row: span 3;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border-radius: 8px;
   background: var(--accent-soft);
@@ -388,7 +388,11 @@ h2 {
 
 .executive-label {
   color: var(--ink-soft);
-  font-weight: 800;
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .executive-card.featured .executive-label,
@@ -400,7 +404,7 @@ h2 {
   align-self: end;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(1.28rem, 2vw, 1.72rem);
+  font-size: clamp(1.32rem, 1.85vw, 1.68rem);
   font-weight: 920;
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
@@ -408,61 +412,79 @@ h2 {
 
 .executive-card small {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .executive-secondary-grid {
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  margin-top: 5px;
-  padding-top: 11px;
+  margin-top: 4px;
+  padding: 11px;
   border-top: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.executive-card.featured .executive-secondary-grid {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.executive-card.featured .executive-secondary-grid small,
+.executive-card.featured .executive-secondary-grid strong {
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .executive-secondary-grid > span {
   display: grid;
-  gap: 3px;
+  align-content: start;
+  gap: 4px;
   min-width: 0;
 }
 
 .executive-secondary-grid small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 850;
+  letter-spacing: 0.04em;
   line-height: 1.05;
+  text-transform: uppercase;
 }
 
 .executive-secondary-grid strong {
   min-width: 0;
   color: var(--ink-soft);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  line-height: 1.08;
+  line-height: 1.12;
   overflow-wrap: anywhere;
 }
 
 .executive-secondary-grid .unavailable strong {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
 }
 
 .business-snapshot-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .snapshot-card {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 13px;
   min-width: 0;
+  min-height: 116px;
   overflow: hidden;
-  padding: 16px;
+  padding: 18px;
 }
 
 .snapshot-card.unavailable {
@@ -473,8 +495,8 @@ h2 {
 .snapshot-icon {
   display: grid;
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   border-radius: 8px;
   background: var(--info-soft);
@@ -498,7 +520,7 @@ h2 {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ink);
-  font-size: clamp(1.1rem, 1.6vw, 1.34rem);
+  font-size: clamp(1.12rem, 1.45vw, 1.28rem);
   font-weight: 920;
   font-variant-numeric: tabular-nums;
   line-height: 1.08;
@@ -507,8 +529,7 @@ h2 {
 .insight-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 16px;
 }
 
 .insight-grid.unavailable {
@@ -518,7 +539,7 @@ h2 {
 .analytics-grid,
 .business-dashboard-grid {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   align-items: stretch;
 }
 
@@ -531,7 +552,7 @@ h2 {
 }
 
 .panel-card {
-  padding: 18px;
+  padding: 20px;
 }
 
 .sales-mix-card {
@@ -544,8 +565,8 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .panel-heading > div {
@@ -557,14 +578,22 @@ h2 {
 .panel-heading span {
   min-width: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.panel-heading h2 {
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 900;
+  line-height: 1.22;
 }
 
 .sales-mix-body {
   display: grid;
   grid-template-columns: minmax(118px, 150px) minmax(0, 1fr);
   align-items: center;
-  gap: 22px;
+  gap: 24px;
   min-width: 0;
 }
 
@@ -587,7 +616,7 @@ h2 {
 
 .mix-list {
   display: grid;
-  gap: 11px;
+  gap: 10px;
 }
 
 .mix-row {
@@ -655,6 +684,8 @@ h2 {
 .mix-values strong {
   min-width: 0;
   text-align: right;
+  font-size: 0.96rem;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
   line-height: 1.12;
@@ -662,6 +693,7 @@ h2 {
 
 .mix-values small {
   color: var(--muted);
+  font-size: 0.78rem;
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -670,8 +702,9 @@ h2 {
 .breakdown-card {
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 15px;
   min-width: 0;
+  min-height: 194px;
 }
 
 .breakdown-title {
@@ -683,8 +716,9 @@ h2 {
 
 .breakdown-icon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
   place-items: center;
   border-radius: 8px;
   background: var(--accent-soft);
@@ -700,7 +734,8 @@ h2 {
 .breakdown-title strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 1.12rem;
+  font-size: 1.05rem;
+  font-weight: 920;
   font-variant-numeric: tabular-nums;
 }
 
@@ -738,16 +773,16 @@ h2 {
 .sales-hour-chart {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-  gap: 12px;
+  gap: 13px;
   min-width: 0;
-  padding-top: 48px;
+  padding-top: 42px;
 }
 
 .hour-bar {
   position: relative;
   display: grid;
-  grid-template-rows: 152px auto;
-  gap: 9px;
+  grid-template-rows: 144px auto;
+  gap: 10px;
   min-width: 0;
   outline: 0;
 }
@@ -760,7 +795,7 @@ h2 {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface-soft);
+  background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface-soft) 100%);
 }
 
 .hour-fill {
@@ -805,7 +840,7 @@ h2 {
 
 .hour-footer strong {
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 900;
   line-height: 1.1;
 }
@@ -813,7 +848,7 @@ h2 {
 .hour-footer small {
   min-width: 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   overflow-wrap: anywhere;
@@ -830,15 +865,15 @@ h2 {
   bottom: calc(100% + 10px);
   z-index: 5;
   display: grid;
-  gap: 4px;
-  min-width: 174px;
-  padding: 10px 11px;
+  gap: 5px;
+  min-width: 168px;
+  padding: 10px 12px;
   border: 1px solid rgba(2, 56, 47, 0.18);
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink-soft);
   box-shadow: var(--shadow-strong);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   opacity: 0;
   pointer-events: none;
   transform: translateX(50%) translateY(4px);
@@ -867,8 +902,8 @@ h2 {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 150px;
-  padding: 18px;
+  min-height: 156px;
+  padding: 20px;
   border: 1px dashed var(--line-strong);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -925,15 +960,15 @@ h2 {
 .top-items-list,
 .insights-list {
   display: grid;
-  gap: 12px;
+  gap: 13px;
   min-width: 0;
 }
 
 .day-sales-row {
   display: grid;
-  grid-template-columns: minmax(78px, 0.42fr) minmax(0, 1fr) minmax(126px, max-content);
+  grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr) minmax(126px, max-content);
   align-items: center;
-  gap: 12px;
+  gap: 13px;
   min-width: 0;
 }
 
@@ -981,7 +1016,7 @@ h2 {
 }
 
 .day-track {
-  height: 12px;
+  height: 10px;
 }
 
 .day-track i,
@@ -1017,16 +1052,16 @@ h2 {
 
 .day-values small {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
 }
 
 .health-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(128px, max-content);
-  gap: 12px;
+  gap: 13px;
   min-width: 0;
-  padding: 13px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -1048,7 +1083,8 @@ h2 {
 
 .health-copy strong {
   color: var(--ink-soft);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
+  font-weight: 850;
 }
 
 .health-copy span {
@@ -1128,7 +1164,7 @@ h2 {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) minmax(74px, 0.35fr) minmax(86px, max-content);
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   min-width: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
@@ -1187,9 +1223,9 @@ h2 {
 
 .insight-card {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  padding: 13px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -1209,7 +1245,7 @@ h2 {
 .view-stack,
 .settings-list {
   display: grid;
-  gap: 18px;
+  gap: 24px;
 }
 
 .setup-panel {
@@ -1958,7 +1994,7 @@ tfoot td {
   }
 
   .day-sales-row {
-    grid-template-columns: minmax(68px, 0.35fr) minmax(0, 1fr);
+    grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr);
   }
 
   .day-values {
@@ -2082,12 +2118,38 @@ tfoot td {
     width: 100%;
   }
 
+  .executive-card,
+  .executive-card.has-secondary {
+    min-height: auto;
+    padding: 16px;
+  }
+
+  .executive-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
   .panel-card,
   .table-panel,
   .validation-panel,
   .snapshot-card,
   .tip-summary-card {
     padding: 14px;
+  }
+
+  .panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .sales-hour-chart {
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+    gap: 10px;
+    padding-top: 36px;
+  }
+
+  .hour-bar {
+    grid-template-rows: 122px auto;
   }
 
   .health-row {
