@@ -320,12 +320,9 @@ function SettingsView() {
 }
 
 function ExecutiveMetrics({ result }: { result: CalculationResult }) {
+  const grossSales = result.salesOrders.reduce((total, order) => total + order.grossSales, 0);
   const laborPercent =
     result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
-  const payoutPercent =
-    result.metrics.netSales === 0
-      ? "0%"
-      : formatPercent(result.metrics.totalAllocatedTips / result.metrics.netSales);
   const kpis: Array<{
     label: string;
     value: string;
@@ -334,6 +331,12 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
     featured?: boolean;
     warning?: boolean;
   }> = [
+    {
+      label: "Gross Sales",
+      value: formatCurrency(grossSales),
+      detail: "Clover sales before adjustments",
+      icon: CircleDollarSign
+    },
     {
       label: "Net Sales",
       value: formatCurrency(result.metrics.netSales),
@@ -345,13 +348,6 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
       value: laborPercent,
       detail: `${formatCurrency(result.metrics.totalLaborCost)} labor cost`,
       icon: Users
-    },
-    {
-      label: "Total payout",
-      value: formatCurrency(result.metrics.totalAllocatedTips),
-      detail: `${payoutPercent} of net sales`,
-      icon: WalletCards,
-      featured: true
     }
   ];
 
