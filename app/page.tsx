@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Banknote,
+  BarChart3,
   Calculator,
   CalendarDays,
   ChartPie,
@@ -24,7 +25,7 @@ import {
   Users,
   WalletCards
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateTipDistribution,
@@ -283,6 +284,7 @@ function DashboardView({ result }: { result: CalculationResult }) {
     <div className="view-stack">
       <ExecutiveMetrics result={result} />
       <InsightGrid result={result} />
+      <SalesByHourCard result={result} />
     </div>
   );
 }
@@ -521,6 +523,87 @@ function BreakdownCard({
         ))}
       </div>
       <footer>{footer}</footer>
+    </section>
+  );
+}
+
+type HourlySales = {
+  hour: number;
+  label: string;
+  netSales: number;
+  transactions: number;
+  percentOfPeak: number;
+  isPeak: boolean;
+};
+
+function SalesByHourCard({ result }: { result: CalculationResult }) {
+  const hourlySales = useMemo(() => buildHourlySales(result), [result]);
+  const totalHourlySales = hourlySales.reduce((total, hour) => total + hour.netSales, 0);
+  const peakHour = hourlySales.find((hour) => hour.isPeak);
+
+  return (
+    <section className="panel-card sales-hour-card" aria-label="Sales by hour">
+      <div className="panel-heading">
+        <div>
+          <h2>Sales by Hour</h2>
+          <span>
+            {peakHour
+              ? `Peak ${peakHour.label} at ${formatCurrency(peakHour.netSales)}`
+              : "Hourly net sales from Clover transactions"}
+          </span>
+        </div>
+        <span>{formatCurrency(totalHourlySales)} net sales</span>
+      </div>
+
+      {hourlySales.length === 0 ? (
+        <div className="sales-hour-empty">
+          <span className="breakdown-icon">
+            <BarChart3 aria-hidden="true" size={20} />
+          </span>
+          <span>
+            <strong>No hourly sales yet</strong>
+            <small>Upload and calculate a Clover report with transaction times to see this chart.</small>
+          </span>
+        </div>
+      ) : (
+        <div className="sales-hour-chart" role="list">
+          {hourlySales.map((hour) => {
+            const tooltip = `${hour.label}\nNet Sales: ${formatCurrency(hour.netSales)}\nTransactions: ${formatNumber(hour.transactions, 0)}`;
+            const barStyle = {
+              "--bar-height": `${hour.percentOfPeak}%`
+            } as CSSProperties;
+
+            return (
+              <div
+                className={hour.isPeak ? "hour-bar peak" : "hour-bar"}
+                key={hour.hour}
+                role="listitem"
+                tabIndex={0}
+                style={barStyle}
+                title={tooltip}
+                aria-label={`${hour.label}, ${formatCurrency(hour.netSales)} net sales, ${formatNumber(hour.transactions, 0)} transactions`}
+              >
+                <span className="hour-tooltip">
+                  <strong>{hour.label}</strong>
+                  <span>{formatCurrency(hour.netSales)} net sales</span>
+                  <span>
+                    {formatNumber(hour.transactions, 0)}{" "}
+                    {hour.transactions === 1 ? "transaction" : "transactions"}
+                  </span>
+                </span>
+                <span className="hour-track" aria-hidden="true">
+                  {hour.isPeak ? <em>Peak</em> : null}
+                  <span className="hour-fill" />
+                </span>
+                <span className="hour-footer">
+                  <strong>{hour.label}</strong>
+                  <small>{formatCurrency(hour.netSales)}</small>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -1092,6 +1175,59 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
       ) : null}
     </section>
   );
+}
+
+function buildHourlySales(result: CalculationResult): HourlySales[] {
+  const grouped = new Map<number, { netSales: number; transactions: number }>();
+
+  result.salesOrders.forEach((order) => {
+    if (!order.orderDate) {
+      return;
+    }
+
+    const hour = order.orderDate.getHours();
+    const current = grouped.get(hour) ?? { netSales: 0, transactions: 0 };
+    current.netSales += order.netSales;
+    current.transactions += 1;
+    grouped.set(hour, current);
+  });
+
+  if (grouped.size === 0) {
+    return [];
+  }
+
+  const hours = [...grouped.keys()];
+  const firstHour = Math.min(...hours);
+  const lastHour = Math.max(...hours);
+  const businessHours = Array.from(
+    { length: lastHour - firstHour + 1 },
+    (_, index) => firstHour + index
+  );
+  const peakSales = Math.max(
+    ...businessHours.map((hour) => Math.max(0, grouped.get(hour)?.netSales ?? 0))
+  );
+
+  return businessHours.map((hour) => {
+    const summary = grouped.get(hour) ?? { netSales: 0, transactions: 0 };
+    const positiveSales = Math.max(0, summary.netSales);
+    const percentOfPeak =
+      peakSales === 0 ? 0 : Math.max(safeRatio(positiveSales, peakSales) * 100, positiveSales > 0 ? 6 : 0);
+
+    return {
+      hour,
+      label: formatHourLabel(hour),
+      netSales: roundMoney(summary.netSales),
+      transactions: summary.transactions,
+      percentOfPeak,
+      isPeak: peakSales > 0 && positiveSales === peakSales
+    };
+  });
+}
+
+function formatHourLabel(hour: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric"
+  }).format(new Date(2026, 0, 1, hour));
 }
 
 function formatDateRange(result: CalculationResult): string {
