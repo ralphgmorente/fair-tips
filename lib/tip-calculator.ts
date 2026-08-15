@@ -4,6 +4,7 @@ export type Grid = CellValue[][];
 export type IssueSeverity = "error" | "warning";
 export type IssueSource = "sales" | "timesheet" | "calculation";
 export type TipPool = "store" | "event";
+export type BusinessReportKind = "orders" | "payments";
 
 export type ValidationIssue = {
   severity: IssueSeverity;
@@ -109,13 +110,40 @@ export type SummaryMetrics = {
   totalUnallocatedTips: number;
 };
 
+export type UploadedReportState = {
+  hasOrders: boolean;
+  hasPayments: boolean;
+  hasTimesheet: boolean;
+  salesSource: BusinessReportKind | "none";
+  paymentSource: BusinessReportKind | "none";
+  tipSource: BusinessReportKind | "none";
+};
+
+export type CalculationCapabilities = {
+  hasSalesData: boolean;
+  hasPaymentBreakdown: boolean;
+  hasItemDetails: boolean;
+  hasTimesheet: boolean;
+  hasValidShifts: boolean;
+  hasLaborCost: boolean;
+  hasTipDistribution: boolean;
+};
+
 export type CalculationResult = {
   metrics: SummaryMetrics;
+  reports: UploadedReportState;
+  capabilities: CalculationCapabilities;
   employees: EmployeeSummary[];
   allocationDetails: AllocationDetail[];
   salesOrders: SalesOrder[];
   shifts: Shift[];
   issues: ValidationIssue[];
+};
+
+export type FlexibleReportInput = {
+  ordersGrid?: Grid | null;
+  paymentsGrid?: Grid | null;
+  timesheetGrid?: Grid | null;
 };
 
 const EVENT_ORDER_NUMBER = "CLOVERGO";
@@ -274,6 +302,16 @@ type ParsedSales = {
   issues: ValidationIssue[];
 };
 
+type ParsedSalesSource = ParsedSales & {
+  kind: BusinessReportKind | "none";
+};
+
+type ParsedBusinessReports = {
+  orders: ParsedSales;
+  payments: ParsedSales;
+  issues: ValidationIssue[];
+};
+
 type ParsedTimesheet = {
   shifts: Shift[];
   issues: ValidationIssue[];
@@ -284,12 +322,61 @@ export function calculateTipDistribution(
   salesGrid: Grid,
   timesheetGrid: Grid
 ): CalculationResult {
-  const parsedSales = parseSalesReport(salesGrid);
-  const parsedTimesheet = parseTimesheetReport(timesheetGrid);
-  const issues = [...parsedSales.issues, ...parsedTimesheet.issues];
+  const salesKind = detectBusinessReportKind(salesGrid);
+  return calculateFlexibleReports({
+    ordersGrid: salesKind === "payments" ? null : salesGrid,
+    paymentsGrid: salesKind === "payments" ? salesGrid : null,
+    timesheetGrid
+  });
+}
+
+export function calculateFlexibleReports({
+  ordersGrid,
+  paymentsGrid,
+  timesheetGrid
+}: FlexibleReportInput): CalculationResult {
+  const parsedReports = parseUploadedBusinessReports(ordersGrid, paymentsGrid);
+  const parsedTimesheet = timesheetGrid ? parseTimesheetReport(timesheetGrid) : emptyParsedTimesheet();
+  const parsedSales = chooseSalesSource(parsedReports.orders.orders, parsedReports.payments.orders);
+  const paymentSourceOrders =
+    parsedReports.payments.orders.length > 0 ? parsedReports.payments.orders : parsedSales.orders;
+  const issues = [
+    ...parsedReports.issues,
+    ...parsedReports.orders.issues,
+    ...parsedReports.payments.issues,
+    ...parsedSales.issues,
+    ...parsedTimesheet.issues
+  ];
+  const reports = buildReportState({
+    hasOrders: parsedReports.orders.orders.length > 0,
+    hasPayments: parsedReports.payments.orders.length > 0,
+    hasTimesheet: Boolean(timesheetGrid),
+    salesSource: parsedSales.kind,
+    paymentSource:
+      parsedReports.payments.orders.length > 0
+        ? "payments"
+        : parsedSales.kind === "none"
+          ? "none"
+          : parsedSales.kind,
+    tipSource: parsedSales.kind
+  });
+
+  if (!ordersGrid && !paymentsGrid) {
+    issues.push({
+      severity: "error",
+      source: "sales",
+      message: "Upload an Orders Report or Payments Report to calculate the business dashboard."
+    });
+  } else if (parsedSales.orders.length === 0 && !issues.some((issue) => issue.severity === "error")) {
+    issues.push({
+      severity: "error",
+      source: "sales",
+      message: "No order or payment rows were found after the report header."
+    });
+  }
 
   if (issues.some((issue) => issue.severity === "error")) {
-    return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues);
+    return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues, reports);
   }
 
   const employeeOrder = new Map<string, EmployeeSummary>();
@@ -322,21 +409,14 @@ export function calculateTipDistribution(
   });
 
   const validShifts = parsedTimesheet.shifts.filter((shift) => shift.valid);
-  if (parsedSales.orders.length === 0) {
-    issues.push({
-      severity: "error",
-      source: "sales",
-      message: "No sales rows were found after the report header."
-    });
-  }
 
-  if (parsedTimesheet.shifts.length === 0) {
+  if (timesheetGrid && parsedTimesheet.shifts.length === 0) {
     issues.push({
       severity: "error",
       source: "timesheet",
       message: "No timesheet rows were found after the report header."
     });
-  } else if (validShifts.length === 0) {
+  } else if (timesheetGrid && validShifts.length === 0) {
     issues.push({
       severity: "error",
       source: "timesheet",
@@ -344,27 +424,24 @@ export function calculateTipDistribution(
     });
   }
 
-  const overlapWarnings = findOverlappingShifts(validShifts);
-  issues.push(...overlapWarnings);
+  if (timesheetGrid) {
+    const overlapWarnings = findOverlappingShifts(validShifts);
+    issues.push(...overlapWarnings);
+  }
 
   if (issues.some((issue) => issue.severity === "error")) {
-    return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues);
+    return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues, reports);
   }
 
   const storeOrders = parsedSales.orders.filter((order) => !order.isEvent);
   const eventOrders = parsedSales.orders.filter((order) => order.isEvent);
-  const storeAllocationDetails = allocateOrders(
-    storeOrders,
-    "store",
-    validShifts,
-    employeeOrder
-  );
-  const eventAllocationDetails = allocateOrders(
-    eventOrders,
-    "event",
-    validShifts,
-    employeeOrder
-  );
+  const canAllocateTips = Boolean(timesheetGrid && validShifts.length > 0);
+  const storeAllocationDetails = canAllocateTips
+    ? allocateOrders(storeOrders, "store", validShifts, employeeOrder)
+    : [];
+  const eventAllocationDetails = canAllocateTips
+    ? allocateOrders(eventOrders, "event", validShifts, employeeOrder)
+    : [];
   const allocationDetails = [...storeAllocationDetails, ...eventAllocationDetails];
 
   allocationDetails.forEach((detail) => {
@@ -380,17 +457,21 @@ export function calculateTipDistribution(
   });
 
   const totalTips = sumBy(storeOrders, (order) => order.tip);
-  const unallocatedTips = sumBy(
-    storeAllocationDetails.filter((detail) => detail.activeStaff === 0),
-    (detail) => detail.tip
-  );
-  const allocatedTips = totalTips - unallocatedTips;
+  const unallocatedTips = canAllocateTips
+    ? sumBy(
+        storeAllocationDetails.filter((detail) => detail.activeStaff === 0),
+        (detail) => detail.tip
+      )
+    : 0;
+  const allocatedTips = canAllocateTips ? totalTips - unallocatedTips : 0;
   const eventTips = sumBy(eventOrders, (order) => order.tip);
-  const eventUnallocatedTips = sumBy(
-    eventAllocationDetails.filter((detail) => detail.activeStaff === 0),
-    (detail) => detail.tip
-  );
-  const eventAllocatedTips = eventTips - eventUnallocatedTips;
+  const eventUnallocatedTips = canAllocateTips
+    ? sumBy(
+        eventAllocationDetails.filter((detail) => detail.activeStaff === 0),
+        (detail) => detail.tip
+      )
+    : 0;
+  const eventAllocatedTips = canAllocateTips ? eventTips - eventUnallocatedTips : 0;
   const totalAllocatedTips = allocatedTips + eventAllocatedTips;
   const totalUnallocatedTips = unallocatedTips + eventUnallocatedTips;
 
@@ -403,6 +484,13 @@ export function calculateTipDistribution(
   const totalLaborCost = sumBy(parsedTimesheet.shifts, (shift) => shift.laborCost);
   const netSales = sumBy(parsedSales.orders, (order) => order.netSales);
   const laborPercent = netSales === 0 ? 0 : totalLaborCost / netSales;
+  const hasPaymentBreakdown = paymentSourceOrders.some((order) =>
+    Boolean(paymentSearchText(order) || deliveryPlatform(order))
+  );
+  const hasItemDetails = parsedSales.orders.some(
+    (order) => order.itemName && order.itemQuantity !== null && order.itemSales !== null
+  );
+  const hasLaborCost = Boolean(timesheetGrid && totalLaborCost > 0);
 
   const metrics: SummaryMetrics = {
     totalTips,
@@ -418,27 +506,27 @@ export function calculateTipDistribution(
     netSales,
     laborPercent,
     creditDebitSales: sumBy(
-      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isCreditDebitTender(order)),
+      paymentSourceOrders.filter((order) => !deliveryPlatform(order) && isCreditDebitTender(order)),
       (order) => order.netSales
     ),
     cashSales: sumBy(
-      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isCashTender(order)),
+      paymentSourceOrders.filter((order) => !deliveryPlatform(order) && isCashTender(order)),
       (order) => order.netSales
     ),
     giftCardSales: sumBy(
-      parsedSales.orders.filter((order) => !deliveryPlatform(order) && isGiftCardTender(order)),
+      paymentSourceOrders.filter((order) => !deliveryPlatform(order) && isGiftCardTender(order)),
       (order) => order.netSales
     ),
     grubhubSales: sumBy(
-      parsedSales.orders.filter((order) => deliveryPlatform(order) === "grubhub"),
+      paymentSourceOrders.filter((order) => deliveryPlatform(order) === "grubhub"),
       (order) => order.netSales
     ),
     doorDashSales: sumBy(
-      parsedSales.orders.filter((order) => deliveryPlatform(order) === "doordash"),
+      paymentSourceOrders.filter((order) => deliveryPlatform(order) === "doordash"),
       (order) => order.netSales
     ),
     uberEatsSales: sumBy(
-      parsedSales.orders.filter((order) => deliveryPlatform(order) === "ubereats"),
+      paymentSourceOrders.filter((order) => deliveryPlatform(order) === "ubereats"),
       (order) => order.netSales
     ),
     eventSales: sumBy(eventOrders, (order) => order.orderTotal),
@@ -454,7 +542,7 @@ export function calculateTipDistribution(
     totalUnallocatedTips
   };
 
-  if (metrics.eventOrdersWithTips > 0 && !parsedTimesheet.hasRoleColumn) {
+  if (timesheetGrid && metrics.eventOrdersWithTips > 0 && !parsedTimesheet.hasRoleColumn) {
     issues.push({
       severity: "warning",
       source: "timesheet",
@@ -463,7 +551,7 @@ export function calculateTipDistribution(
     });
   }
 
-  if (metrics.eventOrdersWithTips > 0 && metrics.eventAllocatedTips === 0) {
+  if (timesheetGrid && metrics.eventOrdersWithTips > 0 && metrics.eventAllocatedTips === 0) {
     issues.push({
       severity: "warning",
       source: "calculation",
@@ -481,12 +569,137 @@ export function calculateTipDistribution(
 
   return {
     metrics,
+    reports,
+    capabilities: {
+      hasSalesData: parsedSales.orders.length > 0,
+      hasPaymentBreakdown,
+      hasItemDetails,
+      hasTimesheet: Boolean(timesheetGrid),
+      hasValidShifts: validShifts.length > 0,
+      hasLaborCost,
+      hasTipDistribution: canAllocateTips
+    },
     employees,
     allocationDetails,
     salesOrders: parsedSales.orders,
     shifts: parsedTimesheet.shifts,
     issues
   };
+}
+
+export function detectBusinessReportKind(grid: Grid): BusinessReportKind | null {
+  const ordersHeader = findHeader(grid, SALES_REQUIRED);
+  const paymentsHeader = findHeader(grid, PAYMENTS_REQUIRED);
+
+  if (paymentsHeader && !ordersHeader) {
+    return "payments";
+  }
+
+  if (ordersHeader) {
+    return "orders";
+  }
+
+  return null;
+}
+
+function parseUploadedBusinessReports(
+  ordersGrid?: Grid | null,
+  paymentsGrid?: Grid | null
+): ParsedBusinessReports {
+  const reports: ParsedBusinessReports = {
+    orders: emptyParsedSales(),
+    payments: emptyParsedSales(),
+    issues: []
+  };
+
+  addUploadedBusinessReport(reports, ordersGrid, "orders");
+  addUploadedBusinessReport(reports, paymentsGrid, "payments");
+
+  return reports;
+}
+
+function addUploadedBusinessReport(
+  reports: ParsedBusinessReports,
+  grid: Grid | null | undefined,
+  uploadSlot: BusinessReportKind
+) {
+  if (!grid) {
+    return;
+  }
+
+  const detectedKind = detectBusinessReportKind(grid);
+  if (!detectedKind) {
+    reports.issues.push({
+      severity: "error",
+      source: "sales",
+      message: `The ${formatReportKind(uploadSlot)} upload is not a recognized Clover Orders or Payments report.`
+    });
+    return;
+  }
+
+  const target = detectedKind === "orders" ? reports.orders : reports.payments;
+  if (target.orders.length > 0 || target.issues.length > 0) {
+    reports.issues.push({
+      severity: "warning",
+      source: "sales",
+      message: `A second ${formatReportKind(detectedKind)} was uploaded and ignored to avoid double-counting.`
+    });
+    return;
+  }
+
+  if (detectedKind !== uploadSlot) {
+    reports.issues.push({
+      severity: "warning",
+      source: "sales",
+      message: `The ${formatReportKind(uploadSlot)} slot contained a ${formatReportKind(detectedKind)} and was processed that way.`
+    });
+  }
+
+  const parsed = parseSalesReport(grid);
+  target.orders = parsed.orders;
+  target.issues = parsed.issues;
+}
+
+function chooseSalesSource(
+  orderRows: SalesOrder[],
+  paymentRows: SalesOrder[]
+): ParsedSalesSource {
+  if (orderRows.length > 0) {
+    return { kind: "orders", orders: orderRows, issues: [] };
+  }
+
+  if (paymentRows.length > 0) {
+    return { kind: "payments", orders: paymentRows, issues: [] };
+  }
+
+  return { kind: "none", orders: [], issues: [] };
+}
+
+function emptyParsedSales(): ParsedSales {
+  return { orders: [], issues: [] };
+}
+
+function emptyParsedTimesheet(): ParsedTimesheet {
+  return { shifts: [], issues: [], hasRoleColumn: false };
+}
+
+function buildReportState(reports: UploadedReportState): UploadedReportState {
+  return reports;
+}
+
+function emptyReportState(): UploadedReportState {
+  return {
+    hasOrders: false,
+    hasPayments: false,
+    hasTimesheet: false,
+    salesSource: "none",
+    paymentSource: "none",
+    tipSource: "none"
+  };
+}
+
+function formatReportKind(kind: BusinessReportKind): string {
+  return kind === "orders" ? "Orders Report" : "Payments Report";
 }
 
 export function parseSalesReport(grid: Grid): ParsedSales {
@@ -821,7 +1034,8 @@ export function roundMoney(value: number): number {
 function emptyResult(
   salesOrders: SalesOrder[],
   shifts: Shift[],
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
+  reports: UploadedReportState = emptyReportState()
 ): CalculationResult {
   return {
     metrics: {
@@ -850,6 +1064,16 @@ function emptyResult(
       eventOrdersWithTipsAndNoActiveEmployee: 0,
       totalAllocatedTips: 0,
       totalUnallocatedTips: 0
+    },
+    reports,
+    capabilities: {
+      hasSalesData: salesOrders.length > 0,
+      hasPaymentBreakdown: false,
+      hasItemDetails: false,
+      hasTimesheet: reports.hasTimesheet,
+      hasValidShifts: shifts.some((shift) => shift.valid),
+      hasLaborCost: shifts.some((shift) => shift.laborCost > 0),
+      hasTipDistribution: false
     },
     employees: [],
     allocationDetails: [],

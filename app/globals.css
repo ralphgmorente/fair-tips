@@ -409,7 +409,7 @@ h2 {
 
 .business-snapshot-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -466,6 +466,10 @@ h2 {
   grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
+}
+
+.insight-grid.unavailable {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
 }
 
 .analytics-grid,
@@ -847,8 +851,30 @@ h2 {
 .daily-sales-card,
 .business-health-card,
 .top-items-card,
-.business-insights-card {
+.business-insights-card,
+.feature-unavailable-panel {
   min-width: 0;
+}
+
+.feature-unavailable-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 156px;
+}
+
+.feature-unavailable-panel > span:last-child {
+  display: grid;
+  gap: 5px;
+}
+
+.feature-unavailable-panel strong {
+  color: var(--ink-soft);
+}
+
+.feature-unavailable-panel small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .daily-sales-list,
@@ -1031,6 +1057,12 @@ h2 {
   outline: 3px solid var(--ring);
 }
 
+.target-input input:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .target-input em {
   color: var(--ink-soft);
   font-style: normal;
@@ -1160,7 +1192,7 @@ h2 {
 
 .upload-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 

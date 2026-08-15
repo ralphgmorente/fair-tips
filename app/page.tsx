@@ -34,7 +34,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
-  calculateTipDistribution,
+  calculateFlexibleReports,
   formatCurrency,
   formatDateTime,
   formatNumber,
@@ -64,14 +64,22 @@ const emptyUpload: UploadState = {
 export default function Home() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [activeView, setActiveView] = useState<AppView>("dashboard");
-  const [salesUpload, setSalesUpload] = useState<UploadState>(emptyUpload);
+  const [ordersUpload, setOrdersUpload] = useState<UploadState>(emptyUpload);
+  const [paymentsUpload, setPaymentsUpload] = useState<UploadState>(emptyUpload);
   const [timesheetUpload, setTimesheetUpload] = useState<UploadState>(emptyUpload);
   const [result, setResult] = useState<CalculationResult | null>(null);
 
-  const uploadsReady = salesUpload.status === "ready" && timesheetUpload.status === "ready";
-  const canCalculate = uploadsReady;
+  const hasBusinessReport =
+    ordersUpload.status === "ready" || paymentsUpload.status === "ready";
+  const uploadsReading =
+    ordersUpload.status === "reading" ||
+    paymentsUpload.status === "reading" ||
+    timesheetUpload.status === "reading";
+  const canCalculate = hasBusinessReport && !uploadsReading;
   const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
-  const blockingUploadError = Boolean(salesUpload.error || timesheetUpload.error);
+  const blockingUploadError = Boolean(
+    ordersUpload.error || paymentsUpload.error || timesheetUpload.error
+  );
   const showReportSetup = !result || hasErrors;
   const pageTitle =
     activeView === "dashboard"
@@ -95,12 +103,20 @@ export default function Home() {
     handleReset();
   }
 
-  async function handleUpload(kind: "sales" | "timesheet", file: File | null) {
+  async function handleUpload(
+    kind: "orders" | "payments" | "timesheet",
+    file: File | null
+  ) {
     if (!file) {
       return;
     }
 
-    const setUpload = kind === "sales" ? setSalesUpload : setTimesheetUpload;
+    const setUpload =
+      kind === "orders"
+        ? setOrdersUpload
+        : kind === "payments"
+          ? setPaymentsUpload
+          : setTimesheetUpload;
     setResult(null);
     setUpload({ fileName: file.name, rows: null, error: "", status: "reading" });
 
@@ -123,21 +139,28 @@ export default function Home() {
   }
 
   function handleCalculate() {
-    if (!salesUpload.rows || !timesheetUpload.rows) {
+    if (!ordersUpload.rows && !paymentsUpload.rows) {
       return;
     }
 
-    setResult(calculateTipDistribution(salesUpload.rows, timesheetUpload.rows));
+    setResult(
+      calculateFlexibleReports({
+        ordersGrid: ordersUpload.rows,
+        paymentsGrid: paymentsUpload.rows,
+        timesheetGrid: timesheetUpload.rows
+      })
+    );
   }
 
   function handleReset() {
-    setSalesUpload(emptyUpload);
+    setOrdersUpload(emptyUpload);
+    setPaymentsUpload(emptyUpload);
     setTimesheetUpload(emptyUpload);
     setResult(null);
   }
 
   async function handleExport() {
-    if (!result || hasErrors) {
+    if (!result || hasErrors || !result.capabilities.hasTipDistribution) {
       return;
     }
 
@@ -164,13 +187,15 @@ export default function Home() {
         {showReportSetup ? (
           <>
             <ReportSetupPanel
-              salesUpload={salesUpload}
+              ordersUpload={ordersUpload}
+              paymentsUpload={paymentsUpload}
               timesheetUpload={timesheetUpload}
-              uploadsReady={uploadsReady}
+              hasBusinessReport={hasBusinessReport}
               canCalculate={canCalculate}
               blockingUploadError={blockingUploadError}
               result={result}
-              onSalesUpload={(file) => handleUpload("sales", file)}
+              onOrdersUpload={(file) => handleUpload("orders", file)}
+              onPaymentsUpload={(file) => handleUpload("payments", file)}
               onTimesheetUpload={(file) => handleUpload("timesheet", file)}
               onCalculate={handleCalculate}
               onReset={handleReset}
@@ -274,7 +299,7 @@ function DashboardHeader({
         <button
           className="primary-button compact"
           type="button"
-          disabled={!result || hasErrors}
+          disabled={!result || hasErrors || !result.capabilities.hasTipDistribution}
           onClick={onExport}
         >
           <Download aria-hidden="true" size={18} />
@@ -305,7 +330,7 @@ function DashboardView({ result }: { result: CalculationResult }) {
   return (
     <div className="view-stack">
       <ExecutiveMetrics result={result} />
-      <BusinessSnapshot averageTicket={averageTicket} hourlySales={hourlySales} />
+      <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <InsightGrid result={result} />
       <div className="analytics-grid">
         <SalesByHourCard hourlySales={hourlySales} />
@@ -321,6 +346,30 @@ function DashboardView({ result }: { result: CalculationResult }) {
 }
 
 function TipsView({ result }: { result: CalculationResult }) {
+  if (!result.capabilities.hasTimesheet) {
+    return (
+      <div className="view-stack">
+        <FeatureUnavailablePanel
+          icon={Users}
+          title="Timesheet required"
+          message="Upload a Clover Timesheet with an Orders or Payments report to calculate employee hours, labor, and tip distribution."
+        />
+      </div>
+    );
+  }
+
+  if (!result.capabilities.hasTipDistribution) {
+    return (
+      <div className="view-stack">
+        <FeatureUnavailablePanel
+          icon={Users}
+          title="Valid shifts required"
+          message="The Timesheet was uploaded, but no valid clock-in and clock-out shifts are available for tip distribution."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="view-stack">
       <TipSummaryStrip result={result} />
@@ -328,6 +377,28 @@ function TipsView({ result }: { result: CalculationResult }) {
       <EmployeeTable result={result} />
       <UnallocatedOrders result={result} />
     </div>
+  );
+}
+
+function FeatureUnavailablePanel({
+  icon: Icon,
+  title,
+  message
+}: {
+  icon: LucideIcon;
+  title: string;
+  message: string;
+}) {
+  return (
+    <section className="panel-card feature-unavailable-panel">
+      <span className="breakdown-icon">
+        <Icon aria-hidden="true" size={20} />
+      </span>
+      <span>
+        <strong>{title}</strong>
+        <small>{message}</small>
+      </span>
+    </section>
   );
 }
 
@@ -354,8 +425,16 @@ function SettingsView() {
 
 function ExecutiveMetrics({ result }: { result: CalculationResult }) {
   const grossSales = result.salesOrders.reduce((total, order) => total + order.grossSales, 0);
-  const laborPercent =
-    result.metrics.netSales === 0 ? "0%" : formatPercent(result.metrics.laborPercent);
+  const laborValue = result.capabilities.hasLaborCost
+    ? formatPercent(result.metrics.laborPercent)
+    : result.capabilities.hasTimesheet
+      ? "Wage data required"
+      : "Timesheet required";
+  const laborDetail = result.capabilities.hasLaborCost
+    ? `${formatCurrency(result.metrics.totalLaborCost)} labor cost`
+    : result.capabilities.hasTimesheet
+      ? "Add wage rate or estimated wages"
+      : "Upload Timesheet for labor";
   const kpis: Array<{
     label: string;
     value: string;
@@ -378,9 +457,10 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
     },
     {
       label: "Labor",
-      value: laborPercent,
-      detail: `${formatCurrency(result.metrics.totalLaborCost)} labor cost`,
-      icon: Users
+      value: laborValue,
+      detail: laborDetail,
+      icon: Users,
+      warning: !result.capabilities.hasLaborCost
     }
   ];
 
@@ -416,6 +496,21 @@ function InsightGrid({ result }: { result: CalculationResult }) {
   const deliveryTotal =
     result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
   const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
+
+  if (!result.capabilities.hasPaymentBreakdown) {
+    return (
+      <section className="insight-grid unavailable" aria-label="Sales and payment insights">
+        <SalesMixCard result={result} />
+        <section className="panel-card breakdown-card insight-unavailable-card">
+          <AnalyticsEmptyState
+            icon={CreditCard}
+            title="Payment breakdown unavailable"
+            message="Upload a Clover report with tender, payment note, or order type fields to classify payment and delivery channels."
+          />
+        </section>
+      </section>
+    );
+  }
 
   return (
     <section className="insight-grid" aria-label="Sales and payment insights">
@@ -474,6 +569,13 @@ function SalesMixCard({ result }: { result: CalculationResult }) {
         <h2>Sales mix</h2>
         <span>{formatCurrency(result.metrics.netSales)} net sales</span>
       </div>
+      {!result.capabilities.hasPaymentBreakdown ? (
+        <AnalyticsEmptyState
+          icon={ChartPie}
+          title="Sales mix unavailable"
+          message="Tender or delivery fields are required for this breakdown."
+        />
+      ) : (
       <div className="sales-mix-body">
         <div className="donut-chart" style={donutStyle} aria-hidden="true">
           <span />
@@ -492,6 +594,7 @@ function SalesMixCard({ result }: { result: CalculationResult }) {
           ) : null}
         </div>
       </div>
+      )}
     </section>
   );
 }
@@ -597,14 +700,32 @@ type BusinessInsight = {
 };
 
 function BusinessSnapshot({
+  result,
   averageTicket,
   hourlySales
 }: {
+  result: CalculationResult;
   averageTicket: AverageTicketMetric;
   hourlySales: HourlySales[];
 }) {
   const peakHour = getPeakHour(hourlySales);
+  const countLabel = result.reports.salesSource === "orders" ? "Order Count" : "Transaction Count";
+  const countDetail =
+    result.reports.salesSource === "orders"
+      ? "Orders source of truth"
+      : result.reports.salesSource === "payments"
+        ? "Payments source of truth"
+        : "Upload Orders or Payments";
   const cards = [
+    {
+      label: countLabel,
+      value: result.capabilities.hasSalesData
+        ? formatNumber(result.salesOrders.length, 0)
+        : "Data unavailable",
+      detail: countDetail,
+      icon: CircleDollarSign,
+      unavailable: !result.capabilities.hasSalesData
+    },
     {
       label: "Average Ticket",
       value: averageTicket.available ? formatCurrency(averageTicket.value) : "Data unavailable",
@@ -819,8 +940,13 @@ function BusinessHealthCard({
 
   const laborTarget = parsePositiveTarget(laborTargetInput);
   const ticketTarget = parsePositiveTarget(ticketTargetInput);
-  const laborHealth = getLaborHealth(result.metrics.laborPercent, laborTarget);
+  const laborHealth = getLaborHealth(result, laborTarget);
   const ticketHealth = getAverageTicketHealth(averageTicket, ticketTarget);
+  const laborDisplayValue = result.capabilities.hasLaborCost
+    ? formatPercent(result.metrics.laborPercent)
+    : result.capabilities.hasTimesheet
+      ? "Wage data required"
+      : "Timesheet required";
 
   return (
     <section className="panel-card business-health-card" aria-label="Business health">
@@ -836,7 +962,7 @@ function BusinessHealthCard({
         <div className={`health-row ${laborHealth.tone}`}>
           <div className="health-copy">
             <strong>Labor</strong>
-            <span>{formatPercent(result.metrics.laborPercent)}</span>
+            <span>{laborDisplayValue}</span>
             <small>{laborHealth.label}</small>
           </div>
           <label className="target-input">
@@ -847,6 +973,7 @@ function BusinessHealthCard({
               type="number"
               inputMode="decimal"
               value={laborTargetInput}
+              disabled={!result.capabilities.hasLaborCost}
               onChange={(event) => handleLaborTargetChange(event.target.value)}
             />
             <em>%</em>
@@ -976,37 +1103,44 @@ function AnalyticsEmptyState({
 }
 
 function ReportSetupPanel({
-  salesUpload,
+  ordersUpload,
+  paymentsUpload,
   timesheetUpload,
-  uploadsReady,
+  hasBusinessReport,
   canCalculate,
   blockingUploadError,
   result,
-  onSalesUpload,
+  onOrdersUpload,
+  onPaymentsUpload,
   onTimesheetUpload,
   onCalculate,
   onReset
 }: {
-  salesUpload: UploadState;
+  ordersUpload: UploadState;
+  paymentsUpload: UploadState;
   timesheetUpload: UploadState;
-  uploadsReady: boolean;
+  hasBusinessReport: boolean;
   canCalculate: boolean;
   blockingUploadError: boolean;
   result: CalculationResult | null;
-  onSalesUpload: (file: File | null) => void;
+  onOrdersUpload: (file: File | null) => void;
+  onPaymentsUpload: (file: File | null) => void;
   onTimesheetUpload: (file: File | null) => void;
   onCalculate: () => void;
   onReset: () => void;
 }) {
   const errors = result?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const warnings = result?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
+  const hasTimesheet = timesheetUpload.status === "ready";
   const setupMessage = result
     ? errors
       ? `${errors} blocking issue${errors === 1 ? "" : "s"} found`
       : `${warnings} warning${warnings === 1 ? "" : "s"} found`
-    : uploadsReady
-      ? "Reports ready to calculate"
-      : "Upload both reports to begin";
+    : hasBusinessReport
+      ? hasTimesheet
+        ? "Business and timesheet reports ready"
+        : "Business dashboard ready"
+      : "Upload Orders or Payments to begin";
 
   return (
     <section className="panel-card setup-panel" aria-label="Report setup">
@@ -1015,14 +1149,15 @@ function ReportSetupPanel({
           <h2>Reports</h2>
           <span>{setupMessage}</span>
         </div>
-        <span className={uploadsReady ? "setup-state ready" : "setup-state"}>
-          {uploadsReady ? "Ready" : "Waiting"}
+        <span className={hasBusinessReport ? "setup-state ready" : "setup-state"}>
+          {hasBusinessReport ? "Ready" : "Waiting"}
         </span>
       </div>
       <div className="upload-row">
-        <UploadPanel title="Sales report" upload={salesUpload} onUpload={onSalesUpload} />
+        <UploadPanel title="Orders Report" upload={ordersUpload} onUpload={onOrdersUpload} />
+        <UploadPanel title="Payments Report" upload={paymentsUpload} onUpload={onPaymentsUpload} />
         <UploadPanel
-          title="Timesheet report"
+          title="Timesheet"
           upload={timesheetUpload}
           onUpload={onTimesheetUpload}
         />
@@ -1031,7 +1166,7 @@ function ReportSetupPanel({
         <div className={result && errors ? "setup-validation error" : "setup-validation"}>
           {result && errors ? (
             <AlertTriangle aria-hidden="true" size={18} />
-          ) : uploadsReady ? (
+          ) : hasBusinessReport ? (
             <CheckCircle2 aria-hidden="true" size={18} />
           ) : (
             <Upload aria-hidden="true" size={18} />
@@ -1041,9 +1176,9 @@ function ReportSetupPanel({
               ? "Fix the upload issue before calculating."
               : result
                 ? `${errors} errors, ${warnings} warnings`
-                : uploadsReady
-                  ? "Run calculation to preview the dashboard and tips."
-                  : "Waiting for the sales and timesheet reports."}
+                : hasBusinessReport
+                  ? "Run calculation for dashboard analytics. Timesheet unlocks labor and tips."
+                  : "Waiting for an Orders Report or Payments Report."}
           </span>
         </div>
         <div className="setup-actions">
@@ -1054,7 +1189,7 @@ function ReportSetupPanel({
             onClick={onCalculate}
           >
             <Calculator aria-hidden="true" size={18} />
-            Calculate tips
+            Calculate dashboard
           </button>
           <button className="secondary-button" type="button" onClick={onReset}>
             <RotateCcw aria-hidden="true" size={17} />
@@ -1801,14 +1936,23 @@ function parsePositiveTarget(value: string): number | null {
 }
 
 function getLaborHealth(
-  laborPercent: number,
+  result: CalculationResult,
   targetPercent: number | null
 ): { label: string; meterPercent: number; tone: string } {
+  if (!result.capabilities.hasTimesheet) {
+    return { label: "Upload Timesheet to track labor", meterPercent: 0, tone: "neutral" };
+  }
+
+  if (!result.capabilities.hasLaborCost) {
+    return { label: "Add wage rate or estimated wages", meterPercent: 0, tone: "neutral" };
+  }
+
   if (targetPercent === null) {
     return { label: "Set a labor target", meterPercent: 0, tone: "neutral" };
   }
 
   const targetRatio = targetPercent / 100;
+  const laborPercent = result.metrics.laborPercent;
   const meterPercent = Math.min(safeRatio(laborPercent, targetRatio) * 100, 100);
   return laborPercent <= targetRatio
     ? { label: "Within configured target", meterPercent, tone: "positive" }
