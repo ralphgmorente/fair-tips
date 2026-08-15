@@ -32,6 +32,9 @@ export type SalesOrder = {
   paymentNote: string;
   orderType: string;
   note: string;
+  itemName: string;
+  itemQuantity: number | null;
+  itemSales: number | null;
   rawDate: string;
   isEvent: boolean;
 };
@@ -198,6 +201,27 @@ const PAYMENT_TOTAL_HEADERS = [
 const PAYMENT_NOTE_HEADERS = ["Payment Note", "Payment Notes"];
 const ORDER_TYPE_HEADERS = ["Order Type"];
 const NOTE_HEADERS = ["Note", "Notes", "Custom Fields"];
+const ITEM_NAME_HEADERS = [
+  "Item",
+  "Item Name",
+  "Product",
+  "Product Name",
+  "Line Item",
+  "Line Item Name",
+  "Menu Item",
+  "Menu Item Name"
+];
+const ITEM_QUANTITY_HEADERS = ["Quantity", "Qty", "Quantity Sold", "Items Sold"];
+const ITEM_SALES_HEADERS = [
+  "Item Sales",
+  "Item Total",
+  "Line Item Total",
+  "Line Total",
+  "Product Sales",
+  "Product Total",
+  "Net Sales",
+  "Gross Sales"
+];
 const PAYMENT_RESULT_HEADERS = ["Order Payment State", "Result"];
 const PAYMENT_ID_HEADERS = ["Payment ID"];
 const TIP_HEADERS = ["Tip", "Tip Amount"];
@@ -507,6 +531,9 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const paymentNoteIndex = findColumn(header.lookup, PAYMENT_NOTE_HEADERS)?.index;
   const orderTypeIndex = findColumn(header.lookup, ORDER_TYPE_HEADERS)?.index;
   const noteIndex = findColumn(header.lookup, NOTE_HEADERS)?.index;
+  const itemNameIndex = findColumn(header.lookup, ITEM_NAME_HEADERS)?.index;
+  const itemQuantityIndex = findColumn(header.lookup, ITEM_QUANTITY_HEADERS)?.index;
+  const itemSalesIndex = findColumn(header.lookup, ITEM_SALES_HEADERS)?.index;
   const orders: SalesOrder[] = [];
   const seenOrderIds = new Set<string>();
   let skippedFailedPayments = 0;
@@ -633,6 +660,9 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       paymentNote: paymentNoteIndex === undefined ? "" : cellText(row[paymentNoteIndex]),
       orderType: orderTypeIndex === undefined ? "" : cellText(row[orderTypeIndex]),
       note: noteIndex === undefined ? "" : cellText(row[noteIndex]),
+      itemName: itemNameIndex === undefined ? "" : cellText(row[itemNameIndex]),
+      itemQuantity: itemQuantityIndex === undefined ? null : parseOptionalNumber(row[itemQuantityIndex]),
+      itemSales: itemSalesIndex === undefined ? null : parseOptionalMoneyValue(row[itemSalesIndex]),
       rawDate,
       isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER
     });
@@ -918,6 +948,24 @@ function parseMoney(value: CellValue, blankIsZero = true): { valid: boolean; val
 function parseOptionalMoney(value: CellValue): number {
   const parsed = parseMoney(value);
   return parsed.valid ? parsed.value : 0;
+}
+
+function parseOptionalMoneyValue(value: CellValue): number | null {
+  const parsed = parseMoney(value, false);
+  return parsed.valid ? parsed.value : null;
+}
+
+function parseOptionalNumber(value: CellValue): number | null {
+  if (value === null || value === undefined || cellText(value) === "") {
+    return null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  const parsed = Number(cellText(value).replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function findColumn(

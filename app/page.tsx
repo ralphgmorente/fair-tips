@@ -11,14 +11,20 @@ import {
   CheckCircle2,
   CircleDollarSign,
   CircleHelp,
+  Clock,
   CreditCard,
   Download,
+  Lightbulb,
   LockKeyhole,
+  PackageSearch,
+  ReceiptText,
   RotateCcw,
   Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Target,
+  TrendingUp,
   Truck,
   type LucideIcon,
   Upload,
@@ -280,11 +286,36 @@ function DashboardHeader({
 }
 
 function DashboardView({ result }: { result: CalculationResult }) {
+  const hourlySales = useMemo(() => buildHourlySales(result), [result]);
+  const dailySales = useMemo(() => buildDailySales(result), [result]);
+  const topSellingItems = useMemo(() => buildTopSellingItems(result), [result]);
+  const averageTicket = useMemo(() => buildAverageTicket(result), [result]);
+  const businessInsights = useMemo(
+    () =>
+      buildBusinessInsights({
+        result,
+        averageTicket,
+        hourlySales,
+        dailySales,
+        topSellingItems
+      }),
+    [averageTicket, dailySales, hourlySales, result, topSellingItems]
+  );
+
   return (
     <div className="view-stack">
       <ExecutiveMetrics result={result} />
+      <BusinessSnapshot averageTicket={averageTicket} hourlySales={hourlySales} />
       <InsightGrid result={result} />
-      <SalesByHourCard result={result} />
+      <div className="analytics-grid">
+        <SalesByHourCard hourlySales={hourlySales} />
+        <DailySalesTrendCard dailySales={dailySales} />
+      </div>
+      <div className="business-dashboard-grid">
+        <BusinessHealthCard result={result} averageTicket={averageTicket} />
+        <TopSellingItemsCard items={topSellingItems} />
+      </div>
+      <BusinessInsightsCard insights={businessInsights} />
     </div>
   );
 }
@@ -536,10 +567,92 @@ type HourlySales = {
   isPeak: boolean;
 };
 
-function SalesByHourCard({ result }: { result: CalculationResult }) {
-  const hourlySales = useMemo(() => buildHourlySales(result), [result]);
+type DailySales = {
+  dayIndex: number;
+  label: string;
+  fullLabel: string;
+  netSales: number;
+  transactions: number;
+  percentOfPeak: number;
+  isStrongest: boolean;
+  isWeakest: boolean;
+};
+
+type TopSellingItem = {
+  name: string;
+  quantity: number;
+  totalSales: number;
+  percentOfPeak: number;
+};
+
+type AverageTicketMetric = {
+  available: boolean;
+  value: number;
+  transactions: number;
+};
+
+type BusinessInsight = {
+  title: string;
+  detail: string;
+};
+
+function BusinessSnapshot({
+  averageTicket,
+  hourlySales
+}: {
+  averageTicket: AverageTicketMetric;
+  hourlySales: HourlySales[];
+}) {
+  const peakHour = getPeakHour(hourlySales);
+  const cards = [
+    {
+      label: "Average Ticket",
+      value: averageTicket.available ? formatCurrency(averageTicket.value) : "Data unavailable",
+      detail: averageTicket.available
+        ? `${formatTransactionCount(averageTicket.transactions)} used`
+        : "Upload Clover transactions",
+      icon: ReceiptText,
+      unavailable: !averageTicket.available
+    },
+    {
+      label: "Peak Hour",
+      value: peakHour ? formatHourRange(peakHour.hour) : "Data unavailable",
+      detail: peakHour
+        ? `${formatCurrency(peakHour.netSales)} from ${formatTransactionCount(peakHour.transactions)}`
+        : "Needs order times",
+      icon: Clock,
+      unavailable: !peakHour
+    }
+  ];
+
+  return (
+    <section className="business-snapshot-grid" aria-label="Business snapshot">
+      {cards.map((card) => {
+        const Icon = card.icon;
+
+        return (
+          <div
+            className={card.unavailable ? "snapshot-card unavailable" : "snapshot-card"}
+            key={card.label}
+          >
+            <span className="snapshot-icon">
+              <Icon aria-hidden="true" size={20} />
+            </span>
+            <span>
+              <small>{card.label}</small>
+              <strong>{card.value}</strong>
+              <em>{card.detail}</em>
+            </span>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
   const totalHourlySales = hourlySales.reduce((total, hour) => total + hour.netSales, 0);
-  const peakHour = hourlySales.find((hour) => hour.isPeak);
+  const peakHour = getPeakHour(hourlySales);
 
   return (
     <section className="panel-card sales-hour-card" aria-label="Sales by hour">
@@ -556,15 +669,11 @@ function SalesByHourCard({ result }: { result: CalculationResult }) {
       </div>
 
       {hourlySales.length === 0 ? (
-        <div className="sales-hour-empty">
-          <span className="breakdown-icon">
-            <BarChart3 aria-hidden="true" size={20} />
-          </span>
-          <span>
-            <strong>No hourly sales yet</strong>
-            <small>Upload and calculate a Clover report with transaction times to see this chart.</small>
-          </span>
-        </div>
+        <AnalyticsEmptyState
+          icon={BarChart3}
+          title="Hourly data unavailable"
+          message="Upload and calculate a Clover report with transaction times to see this chart."
+        />
       ) : (
         <div className="sales-hour-chart" role="list">
           {hourlySales.map((hour) => {
@@ -605,6 +714,264 @@ function SalesByHourCard({ result }: { result: CalculationResult }) {
         </div>
       )}
     </section>
+  );
+}
+
+function DailySalesTrendCard({ dailySales }: { dailySales: DailySales[] }) {
+  const strongestDay = dailySales.find((day) => day.isStrongest);
+  const weakestDay = dailySales.find((day) => day.isWeakest);
+
+  return (
+    <section className="panel-card daily-sales-card" aria-label="Daily sales trend">
+      <div className="panel-heading">
+        <div>
+          <h2>Daily Sales Trend</h2>
+          <span>
+            {strongestDay
+              ? `Strongest ${strongestDay.fullLabel} at ${formatCurrency(strongestDay.netSales)}`
+              : "Weekday net sales from Clover transactions"}
+          </span>
+        </div>
+        {weakestDay ? <span>Lowest {weakestDay.fullLabel}</span> : null}
+      </div>
+
+      {dailySales.length === 0 ? (
+        <AnalyticsEmptyState
+          icon={TrendingUp}
+          title="Daily data unavailable"
+          message="The Clover report needs usable order dates before daily sales can be shown."
+        />
+      ) : (
+        <div className="daily-sales-list" role="list">
+          {dailySales.map((day) => {
+            const rowStyle = {
+              "--bar-width": `${day.percentOfPeak}%`
+            } as CSSProperties;
+            const className = [
+              "day-sales-row",
+              day.isStrongest ? "strongest" : "",
+              day.isWeakest ? "weakest" : ""
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return (
+              <div
+                className={className}
+                key={day.dayIndex}
+                role="listitem"
+                style={rowStyle}
+                title={`${day.fullLabel}\nNet Sales: ${formatCurrency(day.netSales)}\nTransactions: ${formatNumber(day.transactions, 0)}`}
+              >
+                <span className="day-label">
+                  <strong>{day.label}</strong>
+                  {day.isStrongest ? <em>Strongest</em> : null}
+                  {day.isWeakest ? <em>Lowest</em> : null}
+                </span>
+                <span className="day-track" aria-hidden="true">
+                  <i />
+                </span>
+                <span className="day-values">
+                  <strong>{formatCurrency(day.netSales)}</strong>
+                  <small>{formatTransactionCount(day.transactions)}</small>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BusinessHealthCard({
+  result,
+  averageTicket
+}: {
+  result: CalculationResult;
+  averageTicket: AverageTicketMetric;
+}) {
+  const [laborTargetInput, setLaborTargetInput] = useState("30");
+  const [ticketTargetInput, setTicketTargetInput] = useState("");
+
+  useEffect(() => {
+    const savedLaborTarget = localStorage.getItem("shiftFlowLaborTargetPercent");
+    const savedTicketTarget = localStorage.getItem("shiftFlowAverageTicketTarget");
+
+    if (savedLaborTarget !== null) {
+      setLaborTargetInput(savedLaborTarget);
+    }
+
+    if (savedTicketTarget !== null) {
+      setTicketTargetInput(savedTicketTarget);
+    }
+  }, []);
+
+  function handleLaborTargetChange(value: string) {
+    setLaborTargetInput(value);
+    updateLocalTarget("shiftFlowLaborTargetPercent", value);
+  }
+
+  function handleTicketTargetChange(value: string) {
+    setTicketTargetInput(value);
+    updateLocalTarget("shiftFlowAverageTicketTarget", value);
+  }
+
+  const laborTarget = parsePositiveTarget(laborTargetInput);
+  const ticketTarget = parsePositiveTarget(ticketTargetInput);
+  const laborHealth = getLaborHealth(result.metrics.laborPercent, laborTarget);
+  const ticketHealth = getAverageTicketHealth(averageTicket, ticketTarget);
+
+  return (
+    <section className="panel-card business-health-card" aria-label="Business health">
+      <div className="panel-heading">
+        <div>
+          <h2>Business Health</h2>
+          <span>Targets are configurable for your operation</span>
+        </div>
+        <Target aria-hidden="true" size={20} />
+      </div>
+
+      <div className="health-list">
+        <div className={`health-row ${laborHealth.tone}`}>
+          <div className="health-copy">
+            <strong>Labor</strong>
+            <span>{formatPercent(result.metrics.laborPercent)}</span>
+            <small>{laborHealth.label}</small>
+          </div>
+          <label className="target-input">
+            <span>Target</span>
+            <input
+              min="0"
+              step="0.1"
+              type="number"
+              inputMode="decimal"
+              value={laborTargetInput}
+              onChange={(event) => handleLaborTargetChange(event.target.value)}
+            />
+            <em>%</em>
+          </label>
+          <span className="health-meter" aria-hidden="true">
+            <i style={{ "--meter-width": `${laborHealth.meterPercent}%` } as CSSProperties} />
+          </span>
+        </div>
+
+        <div className={`health-row ${ticketHealth.tone}`}>
+          <div className="health-copy">
+            <strong>Average Ticket</strong>
+            <span>{averageTicket.available ? formatCurrency(averageTicket.value) : "Data unavailable"}</span>
+            <small>{ticketHealth.label}</small>
+          </div>
+          <label className="target-input">
+            <span>Target</span>
+            <input
+              min="0"
+              step="0.01"
+              type="number"
+              inputMode="decimal"
+              placeholder="Set"
+              value={ticketTargetInput}
+              onChange={(event) => handleTicketTargetChange(event.target.value)}
+            />
+            <em>$</em>
+          </label>
+          <span className="health-meter" aria-hidden="true">
+            <i style={{ "--meter-width": `${ticketHealth.meterPercent}%` } as CSSProperties} />
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TopSellingItemsCard({ items }: { items: TopSellingItem[] }) {
+  return (
+    <section className="panel-card top-items-card" aria-label="Top selling items">
+      <div className="panel-heading">
+        <div>
+          <h2>Top Selling Items</h2>
+          <span>{items.length ? "Ranked by item sales" : "Data unavailable"}</span>
+        </div>
+        <PackageSearch aria-hidden="true" size={20} />
+      </div>
+
+      {items.length === 0 ? (
+        <AnalyticsEmptyState
+          icon={PackageSearch}
+          title="Item detail unavailable"
+          message="This Clover file does not include item name, quantity, and item sales columns."
+        />
+      ) : (
+        <div className="top-items-list" role="list">
+          {items.map((item, index) => (
+            <div className="top-item-row" key={item.name} role="listitem">
+              <span className="item-rank">{index + 1}</span>
+              <span className="item-copy">
+                <strong>{item.name}</strong>
+                <small>{formatQuantity(item.quantity)} sold</small>
+              </span>
+              <span className="item-bar" aria-hidden="true">
+                <i style={{ "--bar-width": `${item.percentOfPeak}%` } as CSSProperties} />
+              </span>
+              <strong className="item-sales">{formatCurrency(item.totalSales)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BusinessInsightsCard({ insights }: { insights: BusinessInsight[] }) {
+  return (
+    <section className="panel-card business-insights-card" aria-label="Business insights">
+      <div className="panel-heading">
+        <div>
+          <h2>Business Insights</h2>
+          <span>Calculated from the current imported reports</span>
+        </div>
+        <Lightbulb aria-hidden="true" size={20} />
+      </div>
+
+      {insights.length === 0 ? (
+        <AnalyticsEmptyState
+          icon={Lightbulb}
+          title="No insights yet"
+          message="Upload Clover data with sales, dates, and transaction details to generate insights."
+        />
+      ) : (
+        <div className="insights-list">
+          {insights.map((insight) => (
+            <article className="insight-card" key={insight.title}>
+              <strong>{insight.title}</strong>
+              <span>{insight.detail}</span>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AnalyticsEmptyState({
+  icon: Icon,
+  title,
+  message
+}: {
+  icon: LucideIcon;
+  title: string;
+  message: string;
+}) {
+  return (
+    <div className="analytics-empty">
+      <span className="breakdown-icon">
+        <Icon aria-hidden="true" size={20} />
+      </span>
+      <span>
+        <strong>{title}</strong>
+        <small>{message}</small>
+      </span>
+    </div>
   );
 }
 
@@ -1177,6 +1544,20 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
   );
 }
 
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+function buildAverageTicket(result: CalculationResult): AverageTicketMetric {
+  const transactions = result.salesOrders.length;
+
+  return {
+    available: transactions > 0,
+    value: transactions === 0 ? 0 : roundMoney(result.metrics.netSales / transactions),
+    transactions
+  };
+}
+
 function buildHourlySales(result: CalculationResult): HourlySales[] {
   const grouped = new Map<number, { netSales: number; transactions: number }>();
 
@@ -1224,10 +1605,241 @@ function buildHourlySales(result: CalculationResult): HourlySales[] {
   });
 }
 
+function buildDailySales(result: CalculationResult): DailySales[] {
+  const grouped = new Map<number, { netSales: number; transactions: number }>();
+
+  result.salesOrders.forEach((order) => {
+    if (!order.orderDate) {
+      return;
+    }
+
+    const dayIndex = order.orderDate.getDay();
+    const current = grouped.get(dayIndex) ?? { netSales: 0, transactions: 0 };
+    current.netSales += order.netSales;
+    current.transactions += 1;
+    grouped.set(dayIndex, current);
+  });
+
+  if (grouped.size === 0) {
+    return [];
+  }
+
+  const dayIndexes = WEEKDAY_ORDER.filter((dayIndex) => grouped.has(dayIndex));
+  const peakSales = Math.max(
+    ...dayIndexes.map((dayIndex) => Math.max(0, grouped.get(dayIndex)?.netSales ?? 0))
+  );
+  const weakestSales = Math.min(
+    ...dayIndexes.map((dayIndex) => grouped.get(dayIndex)?.netSales ?? 0)
+  );
+
+  return dayIndexes.map((dayIndex) => {
+    const summary = grouped.get(dayIndex) ?? { netSales: 0, transactions: 0 };
+    const positiveSales = Math.max(0, summary.netSales);
+    const percentOfPeak =
+      peakSales === 0
+        ? 0
+        : Math.max(safeRatio(positiveSales, peakSales) * 100, positiveSales > 0 ? 6 : 0);
+
+    return {
+      dayIndex,
+      label: WEEKDAY_LABELS[dayIndex],
+      fullLabel: WEEKDAY_NAMES[dayIndex],
+      netSales: roundMoney(summary.netSales),
+      transactions: summary.transactions,
+      percentOfPeak,
+      isStrongest: peakSales > 0 && positiveSales === peakSales,
+      isWeakest:
+        dayIndexes.length > 1 && weakestSales !== peakSales && summary.netSales === weakestSales
+    };
+  });
+}
+
+function buildTopSellingItems(result: CalculationResult): TopSellingItem[] {
+  const grouped = new Map<string, { name: string; quantity: number; totalSales: number }>();
+
+  result.salesOrders.forEach((order) => {
+    if (!order.itemName || order.itemQuantity === null || order.itemSales === null) {
+      return;
+    }
+
+    const quantity = Math.max(0, order.itemQuantity);
+    const totalSales = Math.max(0, order.itemSales);
+    if (quantity === 0 && totalSales === 0) {
+      return;
+    }
+
+    const key = normalizeSearch(order.itemName);
+    const current = grouped.get(key) ?? {
+      name: order.itemName,
+      quantity: 0,
+      totalSales: 0
+    };
+    current.quantity += quantity;
+    current.totalSales += totalSales;
+    grouped.set(key, current);
+  });
+
+  const rankedItems = [...grouped.values()]
+    .map((item) => ({
+      ...item,
+      totalSales: roundMoney(item.totalSales)
+    }))
+    .sort((a, b) => b.totalSales - a.totalSales)
+    .slice(0, 10);
+  const peakSales = Math.max(0, ...rankedItems.map((item) => item.totalSales));
+
+  return rankedItems.map((item) => ({
+    ...item,
+    percentOfPeak:
+      peakSales === 0 ? 0 : Math.max(safeRatio(item.totalSales, peakSales) * 100, 8)
+  }));
+}
+
+function buildBusinessInsights({
+  result,
+  averageTicket,
+  hourlySales,
+  dailySales,
+  topSellingItems
+}: {
+  result: CalculationResult;
+  averageTicket: AverageTicketMetric;
+  hourlySales: HourlySales[];
+  dailySales: DailySales[];
+  topSellingItems: TopSellingItem[];
+}): BusinessInsight[] {
+  const insights: BusinessInsight[] = [];
+  const strongestDay = dailySales.find((day) => day.isStrongest);
+  const weakestDay = dailySales.find((day) => day.isWeakest);
+  const peakHour = getPeakHour(hourlySales);
+  const deliveryPlatforms = [
+    { name: "DoorDash", value: result.metrics.doorDashSales },
+    { name: "Uber Eats", value: result.metrics.uberEatsSales },
+    { name: "Grubhub", value: result.metrics.grubhubSales }
+  ].filter((platform) => platform.value > 0);
+  const deliveryTotal = deliveryPlatforms.reduce((total, platform) => total + platform.value, 0);
+  const topDeliveryPlatform = [...deliveryPlatforms].sort((a, b) => b.value - a.value)[0];
+
+  if (strongestDay) {
+    insights.push({
+      title: `${strongestDay.fullLabel} generated the highest sales this period.`,
+      detail: `${formatCurrency(strongestDay.netSales)} across ${formatTransactionCount(strongestDay.transactions)}.`
+    });
+  }
+
+  if (weakestDay) {
+    insights.push({
+      title: `${weakestDay.fullLabel} had the lowest sales this period.`,
+      detail: `${formatCurrency(weakestDay.netSales)} across ${formatTransactionCount(weakestDay.transactions)}.`
+    });
+  }
+
+  if (peakHour) {
+    insights.push({
+      title: `${formatHourRange(peakHour.hour)} was the busiest hour.`,
+      detail: `${formatCurrency(peakHour.netSales)} across ${formatTransactionCount(peakHour.transactions)}.`
+    });
+  }
+
+  if (averageTicket.available) {
+    insights.push({
+      title: `Average Ticket was ${formatCurrency(averageTicket.value)}.`,
+      detail: `${formatTransactionCount(averageTicket.transactions)} were used in the calculation.`
+    });
+  }
+
+  if (deliveryTotal > 0 && topDeliveryPlatform) {
+    insights.push({
+      title: `${topDeliveryPlatform.name} represented ${formatPercent(safeRatio(topDeliveryPlatform.value, deliveryTotal))} of delivery sales.`,
+      detail: `${formatCurrency(topDeliveryPlatform.value)} of ${formatCurrency(deliveryTotal)} delivery net sales.`
+    });
+  }
+
+  if (result.metrics.netSales > 0 && result.metrics.totalLaborCost > 0) {
+    insights.push({
+      title: `Labor represented ${formatPercent(result.metrics.laborPercent)} of Net Sales.`,
+      detail: `${formatCurrency(result.metrics.totalLaborCost)} labor cost against ${formatCurrency(result.metrics.netSales)} net sales.`
+    });
+  }
+
+  if (topSellingItems.length > 0) {
+    const topItem = topSellingItems[0];
+    insights.push({
+      title: `Your top-selling item was ${topItem.name}.`,
+      detail: `${formatCurrency(topItem.totalSales)} from ${formatQuantity(topItem.quantity)} sold.`
+    });
+  }
+
+  return insights.slice(0, 7);
+}
+
 function formatHourLabel(hour: number): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric"
   }).format(new Date(2026, 0, 1, hour));
+}
+
+function formatHourRange(hour: number): string {
+  return `${formatHourLabel(hour)} - ${formatHourLabel((hour + 1) % 24)}`;
+}
+
+function getPeakHour(hourlySales: HourlySales[]): HourlySales | null {
+  return hourlySales.find((hour) => hour.isPeak) ?? null;
+}
+
+function formatTransactionCount(transactions: number): string {
+  return `${formatNumber(transactions, 0)} ${transactions === 1 ? "transaction" : "transactions"}`;
+}
+
+function formatQuantity(quantity: number): string {
+  return Number.isInteger(quantity) ? formatNumber(quantity, 0) : formatNumber(quantity);
+}
+
+function parsePositiveTarget(value: string): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getLaborHealth(
+  laborPercent: number,
+  targetPercent: number | null
+): { label: string; meterPercent: number; tone: string } {
+  if (targetPercent === null) {
+    return { label: "Set a labor target", meterPercent: 0, tone: "neutral" };
+  }
+
+  const targetRatio = targetPercent / 100;
+  const meterPercent = Math.min(safeRatio(laborPercent, targetRatio) * 100, 100);
+  return laborPercent <= targetRatio
+    ? { label: "Within configured target", meterPercent, tone: "positive" }
+    : { label: "Above configured target", meterPercent, tone: "warning" };
+}
+
+function getAverageTicketHealth(
+  averageTicket: AverageTicketMetric,
+  target: number | null
+): { label: string; meterPercent: number; tone: string } {
+  if (!averageTicket.available) {
+    return { label: "Data unavailable", meterPercent: 0, tone: "neutral" };
+  }
+
+  if (target === null) {
+    return { label: "Set an Average Ticket target", meterPercent: 0, tone: "neutral" };
+  }
+
+  const meterPercent = Math.min(safeRatio(averageTicket.value, target) * 100, 100);
+  return averageTicket.value >= target
+    ? { label: "At or above configured target", meterPercent, tone: "positive" }
+    : { label: "Below configured target", meterPercent, tone: "warning" };
+}
+
+function updateLocalTarget(key: string, value: string) {
+  if (value) {
+    localStorage.setItem(key, value);
+    return;
+  }
+
+  localStorage.removeItem(key);
 }
 
 function formatDateRange(result: CalculationResult): string {
