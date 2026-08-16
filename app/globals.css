@@ -335,23 +335,23 @@ h2 {
 .executive-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .executive-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-content: start;
-  gap: 10px 14px;
+  gap: 5px 11px;
   min-width: 0;
-  min-height: 174px;
+  min-height: 118px;
   overflow: hidden;
-  padding: 21px;
+  padding: 14px;
 }
 
 .executive-card.has-secondary {
   container-type: inline-size;
-  min-height: 206px;
+  min-height: 146px;
 }
 
 .executive-card.featured {
@@ -369,8 +369,8 @@ h2 {
 .executive-icon {
   display: grid;
   grid-row: span 3;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   border-radius: 8px;
   background: var(--accent-soft);
@@ -389,7 +389,7 @@ h2 {
 
 .executive-label {
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 850;
   letter-spacing: 0.03em;
   line-height: 1.2;
@@ -405,7 +405,7 @@ h2 {
   align-self: end;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(1.32rem, 1.85vw, 1.68rem);
+  font-size: clamp(1.18rem, 1.58vw, 1.48rem);
   font-weight: 920;
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
@@ -413,7 +413,7 @@ h2 {
 
 .executive-card small {
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 650;
   line-height: 1.35;
 }
@@ -422,10 +422,10 @@ h2 {
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  margin-top: 4px;
-  padding: 11px;
+  margin-top: 1px;
+  padding: 8px 9px;
   border-top: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
@@ -444,13 +444,13 @@ h2 {
 .executive-secondary-grid > span {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .executive-secondary-grid small {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 850;
   letter-spacing: 0.04em;
   line-height: 1.05;
@@ -460,7 +460,7 @@ h2 {
 .executive-secondary-grid strong {
   min-width: 0;
   color: var(--ink-soft);
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   line-height: 1.12;
@@ -469,7 +469,8 @@ h2 {
 
 .executive-secondary-grid .unavailable strong {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.68rem;
+  line-height: 1.05;
   overflow-wrap: normal;
 }
 
@@ -532,15 +533,18 @@ h2 {
   line-height: 1.08;
 }
 
-.insight-grid {
+.dashboard-analytics-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.95fr);
+  grid-template-columns: minmax(0, 2.05fr) minmax(300px, 0.95fr);
   gap: 16px;
   align-items: stretch;
 }
 
-.insight-grid.unavailable {
-  grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.95fr);
+.dashboard-analytics-main {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
 }
 
 .analytics-grid,
@@ -551,7 +555,7 @@ h2 {
 }
 
 .analytics-grid {
-  grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .business-dashboard-grid {
@@ -569,7 +573,7 @@ h2 {
 }
 
 .sales-mix-card .panel-heading {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .panel-heading {
@@ -606,17 +610,17 @@ h2 {
 
 .mix-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .mix-row {
   display: grid;
-  grid-template-columns: minmax(8.5rem, 0.76fr) minmax(10rem, 1.45fr) minmax(9.5rem, max-content);
+  grid-template-columns: minmax(8.2rem, 0.76fr) minmax(8rem, 1.45fr) minmax(8.9rem, max-content);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  padding-bottom: 8px;
+  padding-bottom: 7px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -631,12 +635,14 @@ h2 {
   gap: 8px;
   min-width: 0;
   color: var(--ink-soft);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .mix-label span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mix-row i {
@@ -680,7 +686,7 @@ h2 {
 
 .mix-values {
   display: grid;
-  grid-template-columns: minmax(6.4rem, max-content) minmax(3.8rem, max-content);
+  grid-template-columns: minmax(5.8rem, max-content) minmax(3.4rem, max-content);
   align-items: baseline;
   justify-content: flex-end;
   gap: 10px;
@@ -690,10 +696,10 @@ h2 {
 .mix-values strong {
   min-width: 0;
   text-align: right;
-  font-size: 0.96rem;
+  font-size: 0.92rem;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
   line-height: 1.12;
 }
 
@@ -708,7 +714,7 @@ h2 {
 .mix-track {
   display: block;
   min-width: 0;
-  height: 8px;
+  height: 7px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -771,12 +777,13 @@ h2 {
 .sales-summary-card {
   display: grid;
   align-content: start;
+  align-self: stretch;
   min-width: 0;
-  min-height: 0;
+  min-height: 100%;
 }
 
 .sales-summary-heading {
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 
 .sales-summary-list {
@@ -787,9 +794,9 @@ h2 {
 
 .sales-summary-section {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
-  padding: 12px 0;
+  padding: 11px 0;
   border-top: 1px solid var(--line);
 }
 
@@ -812,8 +819,8 @@ h2 {
 .sales-summary-icon {
   display: grid;
   flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border-radius: 8px;
   background: var(--accent-soft);
@@ -830,14 +837,14 @@ h2 {
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.86rem;
   font-weight: 900;
   line-height: 1.18;
 }
 
 .sales-summary-title em {
   color: var(--ink);
-  font-size: 1rem;
+  font-size: 0.96rem;
   font-style: normal;
   font-weight: 920;
   font-variant-numeric: tabular-nums;
@@ -846,9 +853,9 @@ h2 {
 
 .sales-summary-rows {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  padding-left: 42px;
+  padding-left: 40px;
 }
 
 .sales-summary-rows div,
@@ -858,7 +865,7 @@ h2 {
   gap: 12px;
   min-width: 0;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   line-height: 1.25;
 }
 
@@ -868,7 +875,7 @@ h2 {
 }
 
 .sales-summary-section footer {
-  padding-left: 42px;
+  padding-left: 40px;
   color: var(--accent-dark);
   font-weight: 760;
 }
@@ -945,18 +952,19 @@ h2 {
 }
 
 .sales-hour-chart {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-  gap: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
   min-width: 0;
-  padding-top: 30px;
+  padding-top: 16px;
 }
 
 .hour-bar {
   position: relative;
   display: grid;
-  grid-template-rows: 118px auto;
-  gap: 8px;
+  flex: 1 1 0;
+  grid-template-rows: 94px auto;
+  gap: 6px;
   min-width: 0;
   outline: 0;
 }
@@ -968,7 +976,7 @@ h2 {
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface-soft) 100%);
 }
 
@@ -992,14 +1000,14 @@ h2 {
 
 .hour-track em {
   position: absolute;
-  top: 8px;
+  top: 7px;
   left: 50%;
   transform: translateX(-50%);
   border-radius: 8px;
-  padding: 3px 7px;
+  padding: 3px 6px;
   background: var(--accent-soft);
   color: var(--accent-dark);
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-style: normal;
   font-weight: 900;
   line-height: 1;
@@ -1007,29 +1015,19 @@ h2 {
 
 .hour-footer {
   display: grid;
-  gap: 3px;
   min-width: 0;
   text-align: center;
 }
 
 .hour-footer strong {
   color: var(--ink-soft);
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.02;
+  overflow-wrap: normal;
 }
 
-.hour-footer small {
-  min-width: 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-
-.hour-bar.peak .hour-footer strong,
-.hour-bar.peak .hour-footer small {
+.hour-bar.peak .hour-footer strong {
   color: var(--accent-dark);
 }
 
@@ -1140,30 +1138,41 @@ h2 {
 
 .day-sales-row {
   display: grid;
-  grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr) minmax(126px, max-content);
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr) minmax(96px, max-content);
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
+  padding: 5px 6px;
+  border-radius: 8px;
+}
+
+.day-sales-row.strongest {
+  background: var(--surface-soft);
 }
 
 .day-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .day-label strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink-soft);
+  font-size: 0.82rem;
   font-weight: 900;
+  white-space: nowrap;
 }
 
 .day-label em {
   border-radius: 8px;
-  padding: 3px 7px;
+  padding: 3px 6px;
   background: var(--surface-strong);
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-style: normal;
   font-weight: 900;
   line-height: 1;
@@ -1190,7 +1199,7 @@ h2 {
 }
 
 .day-track {
-  height: 10px;
+  height: 8px;
 }
 
 .day-track i,
@@ -1213,7 +1222,7 @@ h2 {
 
 .day-values {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   text-align: right;
 }
@@ -1226,7 +1235,7 @@ h2 {
 
 .day-values small {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2026,7 +2035,7 @@ tfoot td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .insight-grid {
+  .dashboard-analytics-layout {
     grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.9fr);
   }
 }
@@ -2089,8 +2098,11 @@ tfoot td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .analytics-grid,
   .business-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-analytics-layout {
     grid-template-columns: 1fr;
   }
 
@@ -2119,9 +2131,14 @@ tfoot td {
   .mix-values strong {
     text-align: left;
   }
+
+  .mix-label,
+  .mix-label span {
+    white-space: normal;
+  }
 }
 
-@container (max-width: 300px) {
+@container (max-width: 240px) {
   .executive-secondary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2144,7 +2161,8 @@ tfoot td {
   }
 
   .executive-grid,
-  .insight-grid,
+  .dashboard-analytics-layout,
+  .analytics-grid,
   .upload-row,
   .business-snapshot-grid,
   .tip-summary-grid {
@@ -2319,13 +2337,12 @@ tfoot td {
   }
 
   .sales-hour-chart {
-    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
-    gap: 8px;
-    padding-top: 30px;
+    gap: 5px;
+    padding-top: 16px;
   }
 
   .hour-bar {
-    grid-template-rows: 108px auto;
+    grid-template-rows: 84px auto;
   }
 
   .health-row {

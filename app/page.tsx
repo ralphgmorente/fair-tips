@@ -330,11 +330,11 @@ function DashboardView({ result }: { result: CalculationResult }) {
   return (
     <div className="view-stack">
       <ExecutiveMetrics result={result} />
-      <InsightGrid result={result} />
-      <div className="analytics-grid">
-        <SalesByHourCard hourlySales={hourlySales} />
-        <DailySalesTrendCard dailySales={dailySales} />
-      </div>
+      <DashboardAnalytics
+        result={result}
+        hourlySales={hourlySales}
+        dailySales={dailySales}
+      />
       <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <div className="business-dashboard-grid">
         <TopSellingItemsCard items={topSellingItems} />
@@ -534,28 +534,43 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
   );
 }
 
-function InsightGrid({ result }: { result: CalculationResult }) {
+function DashboardAnalytics({
+  result,
+  hourlySales,
+  dailySales
+}: {
+  result: CalculationResult;
+  hourlySales: HourlySales[];
+  dailySales: DailySales[];
+}) {
+  return (
+    <section className="dashboard-analytics-layout" aria-label="Business analytics">
+      <div className="dashboard-analytics-main">
+        <SalesMixCard result={result} />
+        <div className="analytics-grid">
+          <SalesByHourCard hourlySales={hourlySales} />
+          <DailySalesTrendCard dailySales={dailySales} />
+        </div>
+      </div>
+      <SalesSummaryArea result={result} />
+    </section>
+  );
+}
+
+function SalesSummaryArea({ result }: { result: CalculationResult }) {
   if (!result.capabilities.hasPaymentBreakdown) {
     return (
-      <section className="insight-grid unavailable" aria-label="Sales and payment insights">
-        <SalesMixCard result={result} />
-        <section className="panel-card sales-summary-card insight-unavailable-card">
-          <AnalyticsEmptyState
-            icon={CreditCard}
-            title="Sales summary unavailable"
-            message="Upload a Clover report with tender, payment note, or order type fields to classify payment and delivery channels."
-          />
-        </section>
+      <section className="panel-card sales-summary-card insight-unavailable-card">
+        <AnalyticsEmptyState
+          icon={CreditCard}
+          title="Sales summary unavailable"
+          message="Upload a Clover report with tender, payment note, or order type fields to classify payment and delivery channels."
+        />
       </section>
     );
   }
 
-  return (
-    <section className="insight-grid" aria-label="Sales and payment insights">
-      <SalesMixCard result={result} />
-      <SalesSummaryPanel result={result} />
-    </section>
-  );
+  return <SalesSummaryPanel result={result} />;
 }
 
 function SalesMixCard({ result }: { result: CalculationResult }) {
@@ -892,7 +907,6 @@ function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
                 </span>
                 <span className="hour-footer">
                   <strong>{hour.label}</strong>
-                  <small>{formatCurrency(hour.netSales)}</small>
                 </span>
               </div>
             );
@@ -950,8 +964,8 @@ function DailySalesTrendCard({ dailySales }: { dailySales: DailySales[] }) {
                 title={`${day.fullLabel}\nNet Sales: ${formatCurrency(day.netSales)}\nTransactions: ${formatNumber(day.transactions, 0)}`}
               >
                 <span className="day-label">
-                  <strong>{day.label}</strong>
-                  {day.isStrongest ? <em>Strongest</em> : null}
+                  <strong>{day.fullLabel}</strong>
+                  {day.isStrongest ? <em>Best</em> : null}
                   {day.isWeakest ? <em>Lowest</em> : null}
                 </span>
                 <span className="day-track" aria-hidden="true">
