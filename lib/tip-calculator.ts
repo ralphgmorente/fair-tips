@@ -614,7 +614,7 @@ export function detectBusinessReportKind(grid: Grid): BusinessReportKind | null 
     return "payments";
   }
 
-  if (ordersHeader) {
+  if (ordersHeader || hasCloverSalesSummary(grid)) {
     return "orders";
   }
 
@@ -651,7 +651,7 @@ function addUploadedBusinessReport(
     reports.issues.push({
       severity: "error",
       source: "sales",
-      message: `The ${formatReportKind(uploadSlot)} upload is not a recognized Clover Orders or Payments report.`
+      message: `The ${formatReportKind(uploadSlot)} upload is not a recognized Clover Orders, Payments, or Sales report.`
     });
     return;
   }
@@ -699,6 +699,99 @@ function emptyParsedSales(): ParsedSales {
   return { orders: [], issues: [], fields: emptySalesFields() };
 }
 
+function hasCloverSalesSummary(grid: Grid): boolean {
+  return parseCloverSalesSummaryReport(grid) !== null;
+}
+
+function parseCloverSalesSummaryReport(grid: Grid): ParsedSales | null {
+  const grossSales = findSummaryMoney(grid, ["Gross sales"]);
+  const netSales = findSummaryMoney(grid, ["Net sales"]);
+
+  if (!grossSales || !netSales || !looksLikeCloverSalesSummary(grid)) {
+    return null;
+  }
+
+  const discounts = findSummaryMoney(grid, ["Discounts"]);
+  const refunds = findSummaryMoney(grid, ["Refunds"]);
+  const taxesCollected = findSummaryMoney(grid, ["Taxes collected", "Tax collected"]);
+  const amountCollected = findSummaryMoney(grid, ["Amount collected"]);
+  const taxes = taxesCollected ? Math.abs(taxesCollected.value) : 0;
+  const discountTotal = discounts ? Math.abs(discounts.value) : 0;
+  const refundTotal = refunds ? Math.abs(refunds.value) : 0;
+  const grossSalesTotal = Math.abs(grossSales.value);
+  const netSalesTotal = Math.abs(netSales.value);
+  const collectedTotal = amountCollected ? Math.abs(amountCollected.value) : netSalesTotal + taxes;
+
+  return {
+    orders: [
+      {
+        rowNumber: grossSales.rowNumber,
+        orderDate: null,
+        orderId: "CLOVER-SALES-REPORT-SUMMARY",
+        orderNumber: "",
+        // The KPI subtracts taxes from the internal gross field; Clover summary gross is already pre-tax.
+        grossSales: roundMoney(grossSalesTotal + taxes),
+        discounts: roundMoney(discountTotal),
+        refunds: roundMoney(refundTotal),
+        taxes: roundMoney(taxes),
+        serviceCharges: 0,
+        netSales: roundMoney(netSalesTotal),
+        orderTotal: roundMoney(netSalesTotal + taxes),
+        paymentTotal: roundMoney(collectedTotal),
+        tip: 0,
+        paymentState: "",
+        tender: "",
+        paymentNote: "",
+        orderType: "",
+        note: "",
+        itemName: "",
+        itemQuantity: null,
+        itemSales: null,
+        rawDate: "",
+        isEvent: false
+      }
+    ],
+    issues: [],
+    fields: {
+      grossSales: true,
+      tax: Boolean(taxesCollected),
+      discounts: Boolean(discounts),
+      refunds: Boolean(refunds)
+    }
+  };
+}
+
+function looksLikeCloverSalesSummary(grid: Grid): boolean {
+  const firstLabel = normalizeHeader(cellText(grid[0]?.[0]));
+  return (
+    firstLabel === "sales report" ||
+    Boolean(findSummaryMoney(grid, ["Amount collected"]) && findSummaryMoney(grid, ["Gross sales"]))
+  );
+}
+
+function findSummaryMoney(
+  grid: Grid,
+  labels: string[]
+): { value: number; rowNumber: number } | null {
+  const normalizedLabels = new Set(labels.map((label) => normalizeHeader(label)));
+
+  for (let rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
+    const row = grid[rowIndex];
+    const label = normalizeHeader(cellText(row[0]));
+
+    if (!normalizedLabels.has(label)) {
+      continue;
+    }
+
+    const parsed = parseMoney(row[1], false);
+    if (parsed.valid) {
+      return { value: parsed.value, rowNumber: rowIndex + 1 };
+    }
+  }
+
+  return null;
+}
+
 function emptySalesFields(): SalesFieldAvailability {
   return {
     grossSales: false,
@@ -732,6 +825,11 @@ function formatReportKind(kind: BusinessReportKind): string {
 }
 
 export function parseSalesReport(grid: Grid): ParsedSales {
+  const summaryReport = parseCloverSalesSummaryReport(grid);
+  if (summaryReport) {
+    return summaryReport;
+  }
+
   const issues: ValidationIssue[] = [];
   const ordersHeader = findHeader(grid, SALES_REQUIRED);
   const paymentsHeader = ordersHeader ? null : findHeader(grid, PAYMENTS_REQUIRED);
