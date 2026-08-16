@@ -329,12 +329,11 @@ function DashboardView({ result }: { result: CalculationResult }) {
 
   return (
     <div className="view-stack">
-      <ExecutiveMetrics result={result} />
-      <DashboardAnalytics
-        result={result}
-        hourlySales={hourlySales}
-        dailySales={dailySales}
-      />
+      <DashboardTopLayout result={result} />
+      <div className="analytics-grid">
+        <SalesByHourCard hourlySales={hourlySales} />
+        <DailySalesTrendCard dailySales={dailySales} />
+      </div>
       <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <div className="business-dashboard-grid">
         <TopSellingItemsCard items={topSellingItems} />
@@ -534,23 +533,12 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
   );
 }
 
-function DashboardAnalytics({
-  result,
-  hourlySales,
-  dailySales
-}: {
-  result: CalculationResult;
-  hourlySales: HourlySales[];
-  dailySales: DailySales[];
-}) {
+function DashboardTopLayout({ result }: { result: CalculationResult }) {
   return (
-    <section className="dashboard-analytics-layout" aria-label="Business analytics">
-      <div className="dashboard-analytics-main">
+    <section className="dashboard-top-layout" aria-label="Primary business analytics">
+      <div className="dashboard-top-main">
+        <ExecutiveMetrics result={result} />
         <SalesMixCard result={result} />
-        <div className="analytics-grid">
-          <SalesByHourCard hourlySales={hourlySales} />
-          <DailySalesTrendCard dailySales={dailySales} />
-        </div>
       </div>
       <SalesSummaryArea result={result} />
     </section>
@@ -717,7 +705,7 @@ function SalesSummaryPanel({ result }: { result: CalculationResult }) {
                 <span className="sales-summary-icon">
                   <Icon aria-hidden="true" size={17} />
                 </span>
-                <span>
+                <span className="sales-summary-title-line">
                   <strong>{section.title}</strong>
                   <em>{formatCurrency(section.total)}</em>
                 </span>
@@ -760,6 +748,22 @@ type DailySales = {
   isStrongest: boolean;
   isWeakest: boolean;
 };
+
+type HourlyLinePoint = HourlySales & {
+  x: number;
+  y: number;
+};
+
+const LINE_CHART_WIDTH = 640;
+const LINE_CHART_HEIGHT = 214;
+const LINE_CHART_TOP = 20;
+const LINE_CHART_RIGHT = 22;
+const LINE_CHART_BOTTOM_SPACE = 36;
+const LINE_CHART_LEFT = 48;
+const LINE_CHART_RIGHT_EDGE = LINE_CHART_WIDTH - LINE_CHART_RIGHT;
+const LINE_CHART_BOTTOM = LINE_CHART_HEIGHT - LINE_CHART_BOTTOM_SPACE;
+const LINE_CHART_PLOT_WIDTH = LINE_CHART_RIGHT_EDGE - LINE_CHART_LEFT;
+const LINE_CHART_PLOT_HEIGHT = LINE_CHART_BOTTOM - LINE_CHART_TOP;
 
 type TopSellingItem = {
   name: string;
@@ -854,6 +858,8 @@ function BusinessSnapshot({
 function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
   const totalHourlySales = hourlySales.reduce((total, hour) => total + hour.netSales, 0);
   const peakHour = getPeakHour(hourlySales);
+  const lineChart = buildHourlyLineChart(hourlySales);
+  const tickStep = Math.max(1, Math.ceil(hourlySales.length / 7));
 
   return (
     <section className="panel-card sales-hour-card" aria-label="Sales by hour">
@@ -876,41 +882,73 @@ function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
           message="Upload and calculate a Clover report with transaction times to see this chart."
         />
       ) : (
-        <div className="sales-hour-chart" role="list">
-          {hourlySales.map((hour) => {
-            const tooltip = `${hour.label}\nNet Sales: ${formatCurrency(hour.netSales)}\nTransactions: ${formatNumber(hour.transactions, 0)}`;
-            const barStyle = {
-              "--bar-height": `${hour.percentOfPeak}%`
-            } as CSSProperties;
+        <div className="sales-line-chart">
+          <svg
+            aria-label="Hourly net sales line chart"
+            role="img"
+            viewBox={`0 0 ${LINE_CHART_WIDTH} ${LINE_CHART_HEIGHT}`}
+          >
+            <defs>
+              <linearGradient id="salesHourAreaGradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#2f9f79" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#2f9f79" stopOpacity="0.02" />
+              </linearGradient>
+            </defs>
+            <line
+              className="line-axis"
+              x1={LINE_CHART_LEFT}
+              x2={LINE_CHART_RIGHT_EDGE}
+              y1={LINE_CHART_BOTTOM}
+              y2={LINE_CHART_BOTTOM}
+            />
+            <line
+              className="line-grid"
+              x1={LINE_CHART_LEFT}
+              x2={LINE_CHART_RIGHT_EDGE}
+              y1={LINE_CHART_TOP}
+              y2={LINE_CHART_TOP}
+            />
+            <text className="line-y-label" x={LINE_CHART_LEFT - 8} y={LINE_CHART_TOP + 5}>
+              {formatCompactCurrency(lineChart.maxSales)}
+            </text>
+            <text className="line-y-label" x={LINE_CHART_LEFT - 8} y={LINE_CHART_BOTTOM + 4}>
+              $0
+            </text>
+            {lineChart.areaPath ? <path className="line-area" d={lineChart.areaPath} /> : null}
+            <path className="line-path" d={lineChart.linePath} />
+            {lineChart.points.map((point, index) => {
+              const tooltip = `${point.label}\nNet Sales: ${formatCurrency(point.netSales)}\nTransactions: ${formatNumber(point.transactions, 0)}`;
 
-            return (
-              <div
-                className={hour.isPeak ? "hour-bar peak" : "hour-bar"}
-                key={hour.hour}
-                role="listitem"
-                tabIndex={0}
-                style={barStyle}
-                title={tooltip}
-                aria-label={`${hour.label}, ${formatCurrency(hour.netSales)} net sales, ${formatNumber(hour.transactions, 0)} transactions`}
-              >
-                <span className="hour-tooltip">
-                  <strong>{hour.label}</strong>
-                  <span>{formatCurrency(hour.netSales)} net sales</span>
-                  <span>
-                    {formatNumber(hour.transactions, 0)}{" "}
-                    {hour.transactions === 1 ? "transaction" : "transactions"}
-                  </span>
-                </span>
-                <span className="hour-track" aria-hidden="true">
-                  {hour.isPeak ? <em>Peak</em> : null}
-                  <span className="hour-fill" />
-                </span>
-                <span className="hour-footer">
-                  <strong>{hour.label}</strong>
-                </span>
-              </div>
-            );
-          })}
+              return (
+                <g
+                  aria-label={`${point.label}, ${formatCurrency(point.netSales)} net sales, ${formatNumber(point.transactions, 0)} transactions`}
+                  className={point.isPeak ? "line-point peak" : "line-point"}
+                  key={point.hour}
+                  tabIndex={0}
+                >
+                  <title>{tooltip}</title>
+                  {point.isPeak ? <circle className="line-point-halo" cx={point.x} cy={point.y} r="10" /> : null}
+                  <circle cx={point.x} cy={point.y} r={point.isPeak ? "5" : "4"} />
+                  {point.isPeak ? (
+                    <text className="line-peak-label" x={point.x} y={point.y - 14}>
+                      Peak
+                    </text>
+                  ) : null}
+                </g>
+              );
+            })}
+            {lineChart.points.map((point, index) =>
+              hourlySales.length <= 7 ||
+              index === 0 ||
+              index === lineChart.points.length - 1 ||
+              point.isPeak ||
+              index % tickStep === 0 ? (
+                <text className="line-x-label" key={`tick-${point.hour}`} x={point.x} y={LINE_CHART_HEIGHT - 8}>
+                  {point.label}
+                </text>
+              ) : null
+            )}
+          </svg>
         </div>
       )}
     </section>
@@ -920,6 +958,20 @@ function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
 function DailySalesTrendCard({ dailySales }: { dailySales: DailySales[] }) {
   const strongestDay = dailySales.find((day) => day.isStrongest);
   const weakestDay = dailySales.find((day) => day.isWeakest);
+  const dailySalesByIndex = new Map(dailySales.map((day) => [day.dayIndex, day]));
+  const chartDays = WEEKDAY_ORDER.map(
+    (dayIndex) =>
+      dailySalesByIndex.get(dayIndex) ?? {
+        dayIndex,
+        label: WEEKDAY_LABELS[dayIndex],
+        fullLabel: WEEKDAY_NAMES[dayIndex],
+        netSales: 0,
+        transactions: 0,
+        percentOfPeak: 0,
+        isStrongest: false,
+        isWeakest: false
+      }
+  );
 
   return (
     <section className="panel-card daily-sales-card" aria-label="Daily sales trend">
@@ -942,13 +994,13 @@ function DailySalesTrendCard({ dailySales }: { dailySales: DailySales[] }) {
           message="The Clover report needs usable order dates before daily sales can be shown."
         />
       ) : (
-        <div className="daily-sales-list" role="list">
-          {dailySales.map((day) => {
+        <div className="daily-column-chart" role="list">
+          {chartDays.map((day) => {
             const rowStyle = {
-              "--bar-width": `${day.percentOfPeak}%`
+              "--column-height": `${Math.max(day.percentOfPeak, day.netSales > 0 ? 6 : 0)}%`
             } as CSSProperties;
             const className = [
-              "day-sales-row",
+              "day-column",
               day.isStrongest ? "strongest" : "",
               day.isWeakest ? "weakest" : ""
             ]
@@ -960,21 +1012,21 @@ function DailySalesTrendCard({ dailySales }: { dailySales: DailySales[] }) {
                 className={className}
                 key={day.dayIndex}
                 role="listitem"
+                tabIndex={0}
                 style={rowStyle}
                 title={`${day.fullLabel}\nNet Sales: ${formatCurrency(day.netSales)}\nTransactions: ${formatNumber(day.transactions, 0)}`}
+                aria-label={`${day.fullLabel}, ${formatCurrency(day.netSales)} net sales, ${formatNumber(day.transactions, 0)} transactions`}
               >
-                <span className="day-label">
+                <span className="day-tooltip">
                   <strong>{day.fullLabel}</strong>
-                  {day.isStrongest ? <em>Best</em> : null}
-                  {day.isWeakest ? <em>Lowest</em> : null}
+                  <span>{formatCurrency(day.netSales)} net sales</span>
+                  <span>{formatTransactionCount(day.transactions)}</span>
                 </span>
-                <span className="day-track" aria-hidden="true">
+                <span className="day-column-track" aria-hidden="true">
                   <i />
                 </span>
-                <span className="day-values">
-                  <strong>{formatCurrency(day.netSales)}</strong>
-                  <small>{formatTransactionCount(day.transactions)}</small>
-                </span>
+                <strong>{day.label}</strong>
+                {day.isStrongest ? <em>Best</em> : null}
               </div>
             );
           })}
@@ -1772,6 +1824,65 @@ function buildAverageTicket(result: CalculationResult): AverageTicketMetric {
   };
 }
 
+function buildHourlyLineChart(hourlySales: HourlySales[]): {
+  points: HourlyLinePoint[];
+  linePath: string;
+  areaPath: string;
+  maxSales: number;
+} {
+  const maxSales = Math.max(
+    1,
+    ...hourlySales.map((hour) => Math.max(0, hour.netSales))
+  );
+  const points = hourlySales.map((hour, index) => {
+    const x =
+      hourlySales.length === 1
+        ? LINE_CHART_LEFT + LINE_CHART_PLOT_WIDTH / 2
+        : LINE_CHART_LEFT + (index / (hourlySales.length - 1)) * LINE_CHART_PLOT_WIDTH;
+    const y =
+      LINE_CHART_TOP +
+      (1 - safeRatio(Math.max(0, hour.netSales), maxSales)) * LINE_CHART_PLOT_HEIGHT;
+
+    return {
+      ...hour,
+      x: roundChartCoordinate(x),
+      y: roundChartCoordinate(y)
+    };
+  });
+  const linePath = buildSmoothPath(points);
+  const areaPath =
+    points.length > 1
+      ? `${linePath} L ${points[points.length - 1].x} ${LINE_CHART_BOTTOM} L ${points[0].x} ${LINE_CHART_BOTTOM} Z`
+      : "";
+
+  return {
+    points,
+    linePath,
+    areaPath,
+    maxSales
+  };
+}
+
+function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
+  if (points.length === 0) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    return `M ${points[0].x} ${points[0].y}`;
+  }
+
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const midpointX = roundChartCoordinate((previous.x + point.x) / 2);
+    return `${path} C ${midpointX} ${previous.y}, ${midpointX} ${point.y}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+}
+
+function roundChartCoordinate(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function buildHourlySales(result: CalculationResult): HourlySales[] {
   const grouped = new Map<number, { netSales: number; transactions: number }>();
 
@@ -2003,6 +2114,17 @@ function getPeakHour(hourlySales: HourlySales[]): HourlySales | null {
 
 function formatTransactionCount(transactions: number): string {
   return `${formatNumber(transactions, 0)} ${transactions === 1 ? "transaction" : "transactions"}`;
+}
+
+function formatCompactCurrency(value: number): string {
+  const absoluteValue = Math.abs(value);
+
+  if (absoluteValue >= 1000) {
+    const compactValue = value / 1000;
+    return `$${formatNumber(compactValue, absoluteValue >= 10000 ? 0 : 1)}k`;
+  }
+
+  return formatCurrency(value);
 }
 
 function formatQuantity(quantity: number): string {

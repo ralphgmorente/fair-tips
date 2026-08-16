@@ -533,14 +533,14 @@ h2 {
   line-height: 1.08;
 }
 
-.dashboard-analytics-layout {
+.dashboard-top-layout {
   display: grid;
   grid-template-columns: minmax(0, 2.05fr) minmax(300px, 0.95fr);
   gap: 16px;
   align-items: stretch;
 }
 
-.dashboard-analytics-main {
+.dashboard-top-main {
   display: grid;
   align-content: start;
   gap: 16px;
@@ -810,8 +810,9 @@ h2 {
 }
 
 .sales-summary-title {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   gap: 10px;
   min-width: 0;
 }
@@ -827,28 +828,35 @@ h2 {
   color: var(--accent-dark);
 }
 
-.sales-summary-title > span:last-child {
-  display: grid;
-  gap: 2px;
+.sales-summary-title-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
 }
 
 .sales-summary-title strong {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink-soft);
   font-size: 0.86rem;
   font-weight: 900;
   line-height: 1.18;
+  white-space: nowrap;
 }
 
 .sales-summary-title em {
+  flex: 0 0 auto;
   color: var(--ink);
   font-size: 0.96rem;
   font-style: normal;
   font-weight: 920;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .sales-summary-rows {
@@ -951,122 +959,89 @@ h2 {
   min-width: 0;
 }
 
-.sales-hour-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
+.sales-line-chart {
   min-width: 0;
-  padding-top: 16px;
+  padding-top: 8px;
 }
 
-.hour-bar {
-  position: relative;
-  display: grid;
-  flex: 1 1 0;
-  grid-template-rows: 94px auto;
-  gap: 6px;
-  min-width: 0;
+.sales-line-chart svg {
+  display: block;
+  width: 100%;
+  height: 228px;
+  overflow: visible;
+}
+
+.line-axis,
+.line-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.line-grid {
+  stroke-dasharray: 4 8;
+  opacity: 0.7;
+}
+
+.line-y-label,
+.line-x-label {
+  fill: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 820;
+}
+
+.line-y-label {
+  text-anchor: end;
+}
+
+.line-x-label,
+.line-peak-label {
+  text-anchor: middle;
+}
+
+.line-area {
+  fill: url("#salesHourAreaGradient");
+}
+
+.line-path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.line-point {
+  cursor: default;
   outline: 0;
 }
 
-.hour-track {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface-soft) 100%);
+.line-point circle:not(.line-point-halo) {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
 }
 
-.hour-fill {
-  display: block;
-  width: 100%;
-  height: var(--bar-height);
-  border-radius: 7px 7px 0 0;
-  background: linear-gradient(180deg, #2f9f79 0%, #075b4f 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+.line-point.peak circle:not(.line-point-halo) {
+  fill: var(--accent-soft);
+  stroke: var(--accent-dark);
 }
 
-.hour-bar.peak .hour-track {
-  border-color: rgba(15, 124, 103, 0.48);
-  box-shadow: 0 12px 28px rgba(15, 124, 103, 0.12);
+.line-point-halo {
+  fill: rgba(15, 124, 103, 0.14);
 }
 
-.hour-bar.peak .hour-fill {
-  background: linear-gradient(180deg, #32b77f 0%, #06483d 100%);
+.line-point:focus circle:not(.line-point-halo),
+.line-point:hover circle:not(.line-point-halo) {
+  stroke-width: 4;
 }
 
-.hour-track em {
-  position: absolute;
-  top: 7px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-radius: 8px;
-  padding: 3px 6px;
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-  font-size: 0.66rem;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.hour-footer {
-  display: grid;
-  min-width: 0;
-  text-align: center;
-}
-
-.hour-footer strong {
-  color: var(--ink-soft);
+.line-peak-label {
+  fill: var(--accent-dark);
   font-size: 0.68rem;
   font-weight: 900;
-  line-height: 1.02;
-  overflow-wrap: normal;
-}
-
-.hour-bar.peak .hour-footer strong {
-  color: var(--accent-dark);
-}
-
-.hour-tooltip {
-  position: absolute;
-  right: 50%;
-  bottom: calc(100% + 10px);
-  z-index: 5;
-  display: grid;
-  gap: 5px;
-  min-width: 168px;
-  padding: 10px 12px;
-  border: 1px solid rgba(2, 56, 47, 0.18);
-  border-radius: 8px;
-  background: #ffffff;
-  color: var(--ink-soft);
-  box-shadow: var(--shadow-strong);
-  font-size: 0.8rem;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(50%) translateY(4px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-}
-
-.hour-tooltip strong {
-  color: var(--ink);
-}
-
-.hour-tooltip span {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.hour-bar:hover .hour-tooltip,
-.hour-bar:focus .hour-tooltip {
-  opacity: 1;
-  transform: translateX(50%) translateY(0);
 }
 
 .analytics-empty,
@@ -1127,7 +1102,6 @@ h2 {
   line-height: 1.45;
 }
 
-.daily-sales-list,
 .health-list,
 .top-items-list,
 .insights-list {
@@ -1136,59 +1110,110 @@ h2 {
   min-width: 0;
 }
 
-.day-sales-row {
+.daily-column-chart {
   display: grid;
-  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr) minmax(96px, max-content);
-  align-items: center;
-  gap: 9px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
   min-width: 0;
-  padding: 5px 6px;
-  border-radius: 8px;
+  padding-top: 12px;
 }
 
-.day-sales-row.strongest {
-  background: var(--surface-soft);
-}
-
-.day-label {
-  display: flex;
-  align-items: center;
+.day-column {
+  position: relative;
+  display: grid;
+  grid-template-rows: 150px auto auto;
   gap: 6px;
   min-width: 0;
+  text-align: center;
+  outline: 0;
 }
 
-.day-label strong {
+.day-column-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  font-weight: 900;
-  white-space: nowrap;
+  height: 150px;
+  border-bottom: 1px solid var(--line);
 }
 
-.day-label em {
+.day-column-track i {
+  display: block;
+  width: min(34px, 74%);
+  height: var(--column-height, 0%);
+  min-height: 0;
+  border-radius: 8px 8px 3px 3px;
+  background: linear-gradient(180deg, #31a87d 0%, #075b4f 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.day-column.strongest .day-column-track i {
+  background: linear-gradient(180deg, #35bb84 0%, #06483d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 10px 22px rgba(15, 124, 103, 0.14);
+}
+
+.day-column > strong {
+  color: var(--accent-dark);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.day-column > em {
+  justify-self: center;
   border-radius: 8px;
   padding: 3px 6px;
-  background: var(--surface-strong);
-  color: var(--muted);
-  font-size: 0.64rem;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.62rem;
   font-style: normal;
   font-weight: 900;
   line-height: 1;
 }
 
-.day-sales-row.strongest .day-label em {
-  background: var(--accent-soft);
-  color: var(--accent-dark);
+.day-tooltip {
+  position: absolute;
+  right: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: none;
+  gap: 5px;
+  min-width: 154px;
+  padding: 9px 11px;
+  border: 1px solid rgba(2, 56, 47, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-strong);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translateX(50%) translateY(4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
-.day-sales-row.weakest .day-label em {
-  background: var(--warning-soft);
-  color: var(--warning);
+.day-tooltip strong {
+  color: var(--ink);
 }
 
-.day-track,
+.day-tooltip span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.day-column:hover .day-tooltip,
+.day-column:focus .day-tooltip {
+  display: grid;
+  opacity: 1;
+  transform: translateX(50%) translateY(0);
+}
+
 .item-bar,
 .health-meter {
   display: block;
@@ -1198,11 +1223,6 @@ h2 {
   background: var(--surface-strong);
 }
 
-.day-track {
-  height: 8px;
-}
-
-.day-track i,
 .item-bar i,
 .health-meter i {
   display: block;
@@ -1212,30 +1232,8 @@ h2 {
   background: var(--accent);
 }
 
-.day-sales-row.strongest .day-track i {
-  background: linear-gradient(90deg, #2f9f79 0%, #06483d 100%);
-}
-
-.day-sales-row.weakest .day-track i {
-  background: var(--warning);
-}
-
-.day-values {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-  text-align: right;
-}
-
-.day-values strong,
 .item-sales {
   color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.day-values small {
-  color: var(--muted);
-  font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2035,7 +2033,7 @@ tfoot td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .dashboard-analytics-layout {
+  .dashboard-top-layout {
     grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.9fr);
   }
 }
@@ -2102,7 +2100,7 @@ tfoot td {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-analytics-layout {
+  .dashboard-top-layout {
     grid-template-columns: 1fr;
   }
 
@@ -2161,7 +2159,7 @@ tfoot td {
   }
 
   .executive-grid,
-  .dashboard-analytics-layout,
+  .dashboard-top-layout,
   .analytics-grid,
   .upload-row,
   .business-snapshot-grid,
@@ -2187,15 +2185,16 @@ tfoot td {
     width: min(100%, 360px);
   }
 
-  .day-sales-row {
-    grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr);
+  .sales-line-chart svg {
+    height: 210px;
   }
 
-  .day-values {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, max-content));
-    justify-content: space-between;
-    text-align: left;
+  .day-column {
+    grid-template-rows: 128px auto auto;
+  }
+
+  .day-column-track {
+    height: 128px;
   }
 
   .top-item-row {
@@ -2336,13 +2335,33 @@ tfoot td {
     gap: 7px;
   }
 
-  .sales-hour-chart {
-    gap: 5px;
-    padding-top: 16px;
+  .sales-line-chart {
+    padding-top: 4px;
   }
 
-  .hour-bar {
-    grid-template-rows: 84px auto;
+  .sales-line-chart svg {
+    height: 188px;
+  }
+
+  .daily-column-chart {
+    gap: 6px;
+  }
+
+  .day-column {
+    grid-template-rows: 112px auto auto;
+    gap: 5px;
+  }
+
+  .day-column-track {
+    height: 112px;
+  }
+
+  .day-column-track i {
+    width: min(24px, 76%);
+  }
+
+  .day-column > strong {
+    font-size: 0.66rem;
   }
 
   .health-row {
