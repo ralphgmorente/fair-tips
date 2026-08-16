@@ -350,6 +350,7 @@ h2 {
 }
 
 .executive-card.has-secondary {
+  container-type: inline-size;
   min-height: 206px;
 }
 
@@ -469,6 +470,11 @@ h2 {
 .executive-secondary-grid .unavailable strong {
   color: var(--muted);
   font-size: 0.76rem;
+  overflow-wrap: normal;
+}
+
+.executive-secondary-grid > span:nth-child(2):not(.unavailable) strong {
+  color: var(--accent-dark);
 }
 
 .business-snapshot-grid {
@@ -528,12 +534,13 @@ h2 {
 
 .insight-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.95fr);
   gap: 16px;
+  align-items: stretch;
 }
 
 .insight-grid.unavailable {
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2.1fr) minmax(300px, 0.95fr);
 }
 
 .analytics-grid,
@@ -544,7 +551,7 @@ h2 {
 }
 
 .analytics-grid {
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
 }
 
 .business-dashboard-grid {
@@ -559,6 +566,10 @@ h2 {
   container-type: inline-size;
   min-width: 0;
   overflow: hidden;
+}
+
+.sales-mix-card .panel-heading {
+  margin-bottom: 14px;
 }
 
 .panel-heading {
@@ -595,29 +606,23 @@ h2 {
 
 .mix-list {
   display: grid;
-  gap: 14px;
+  gap: 8px;
   min-width: 0;
 }
 
 .mix-row {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(8.5rem, 0.76fr) minmax(10rem, 1.45fr) minmax(9.5rem, max-content);
+  align-items: center;
+  gap: 12px;
   min-width: 0;
-  padding-bottom: 14px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
 
 .mix-row:last-child {
   padding-bottom: 0;
   border-bottom: 0;
-}
-
-.mix-row-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(11rem, max-content);
-  align-items: baseline;
-  gap: 14px;
-  min-width: 0;
 }
 
 .mix-label {
@@ -674,10 +679,11 @@ h2 {
 }
 
 .mix-values {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(6.4rem, max-content) minmax(3.8rem, max-content);
   align-items: baseline;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -702,7 +708,7 @@ h2 {
 .mix-track {
   display: block;
   min-width: 0;
-  height: 11px;
+  height: 8px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -760,6 +766,111 @@ h2 {
   .mix-fill {
     animation: none;
   }
+}
+
+.sales-summary-card {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sales-summary-heading {
+  margin-bottom: 10px;
+}
+
+.sales-summary-list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.sales-summary-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sales-summary-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.sales-summary-section:last-child {
+  padding-bottom: 0;
+}
+
+.sales-summary-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sales-summary-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.sales-summary-title > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sales-summary-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.sales-summary-title em {
+  color: var(--ink);
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 920;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.sales-summary-rows {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 42px;
+}
+
+.sales-summary-rows div,
+.sales-summary-section footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.sales-summary-rows strong {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.sales-summary-section footer {
+  padding-left: 42px;
+  color: var(--accent-dark);
+  font-weight: 760;
 }
 
 .breakdown-card {
@@ -836,16 +947,16 @@ h2 {
 .sales-hour-chart {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-  gap: 13px;
+  gap: 10px;
   min-width: 0;
-  padding-top: 42px;
+  padding-top: 30px;
 }
 
 .hour-bar {
   position: relative;
   display: grid;
-  grid-template-rows: 144px auto;
-  gap: 10px;
+  grid-template-rows: 118px auto;
+  gap: 8px;
   min-width: 0;
   outline: 0;
 }
@@ -1023,7 +1134,7 @@ h2 {
 .top-items-list,
 .insights-list {
   display: grid;
-  gap: 13px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -1031,7 +1142,7 @@ h2 {
   display: grid;
   grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr) minmax(126px, max-content);
   align-items: center;
-  gap: 13px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -1916,7 +2027,7 @@ tfoot td {
   }
 
   .insight-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.9fr);
   }
 }
 
@@ -1993,18 +2104,26 @@ tfoot td {
     width: 100%;
   }
 
-  .mix-row-heading {
+  .mix-row {
     grid-template-columns: 1fr;
     gap: 7px;
+    padding-bottom: 10px;
   }
 
   .mix-values {
+    grid-template-columns: minmax(0, 1fr) minmax(3.8rem, max-content);
     justify-content: space-between;
     width: 100%;
   }
 
   .mix-values strong {
     text-align: left;
+  }
+}
+
+@container (max-width: 300px) {
+  .executive-secondary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2034,6 +2153,11 @@ tfoot td {
 
   .mix-list {
     width: 100%;
+  }
+
+  .sales-summary-rows,
+  .sales-summary-section footer {
+    padding-left: 0;
   }
 
   .employee-heading {
@@ -2196,12 +2320,12 @@ tfoot td {
 
   .sales-hour-chart {
     grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
-    gap: 10px;
-    padding-top: 36px;
+    gap: 8px;
+    padding-top: 30px;
   }
 
   .hour-bar {
-    grid-template-rows: 122px auto;
+    grid-template-rows: 108px auto;
   }
 
   .health-row {

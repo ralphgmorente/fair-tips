@@ -535,18 +535,14 @@ function ExecutiveMetrics({ result }: { result: CalculationResult }) {
 }
 
 function InsightGrid({ result }: { result: CalculationResult }) {
-  const deliveryTotal =
-    result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
-  const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
-
   if (!result.capabilities.hasPaymentBreakdown) {
     return (
       <section className="insight-grid unavailable" aria-label="Sales and payment insights">
         <SalesMixCard result={result} />
-        <section className="panel-card breakdown-card insight-unavailable-card">
+        <section className="panel-card sales-summary-card insight-unavailable-card">
           <AnalyticsEmptyState
             icon={CreditCard}
-            title="Payment breakdown unavailable"
+            title="Sales summary unavailable"
             message="Upload a Clover report with tender, payment note, or order type fields to classify payment and delivery channels."
           />
         </section>
@@ -557,36 +553,7 @@ function InsightGrid({ result }: { result: CalculationResult }) {
   return (
     <section className="insight-grid" aria-label="Sales and payment insights">
       <SalesMixCard result={result} />
-      <BreakdownCard
-        title="Delivery Platforms"
-        total={deliveryTotal}
-        icon={Truck}
-        rows={[
-          ["Uber Eats", result.metrics.uberEatsSales],
-          ["DoorDash", result.metrics.doorDashSales],
-          ["Grubhub", result.metrics.grubhubSales]
-        ]}
-        footer={`${formatPercent(safeRatio(deliveryTotal, result.metrics.netSales))} of net sales`}
-      />
-      <BreakdownCard
-        title="Credit & Debit"
-        total={result.metrics.creditDebitSales}
-        icon={CreditCard}
-        rows={[["Card sales", result.metrics.creditDebitSales]]}
-        footer={`${formatPercent(
-          safeRatio(result.metrics.creditDebitSales, result.metrics.netSales)
-        )} of net sales`}
-      />
-      <BreakdownCard
-        title="Cash & Gift Cards"
-        total={cashGiftTotal}
-        icon={Banknote}
-        rows={[
-          ["Cash", result.metrics.cashSales],
-          ["Gift Cards", result.metrics.giftCardSales]
-        ]}
-        footer={`${formatPercent(safeRatio(cashGiftTotal, result.metrics.netSales))} of net sales`}
-      />
+      <SalesSummaryPanel result={result} />
     </section>
   );
 }
@@ -659,56 +626,102 @@ function MixRow({
 
   return (
     <div className="mix-row" aria-label={`${label}: ${formattedValue}, ${formattedPercent}`}>
-      <div className="mix-row-heading">
-        <span className="mix-label">
-          <i data-tone={tone} />
-          <span>{label}</span>
-        </span>
-        <span className="mix-values">
-          <strong>{formattedValue}</strong>
-          <small>{formattedPercent}</small>
-        </span>
-      </div>
+      <span className="mix-label">
+        <i data-tone={tone} />
+        <span>{label}</span>
+      </span>
       <span className="mix-track" aria-hidden="true">
         <span className="mix-fill" data-tone={tone} style={barStyle} />
+      </span>
+      <span className="mix-values">
+        <strong>{formattedValue}</strong>
+        <small>{formattedPercent}</small>
       </span>
     </div>
   );
 }
 
-function BreakdownCard({
-  title,
-  total,
-  icon: Icon,
-  rows,
-  footer
-}: {
-  title: string;
-  total: number;
-  icon: LucideIcon;
-  rows: Array<[string, number]>;
-  footer: string;
-}) {
+function SalesSummaryPanel({ result }: { result: CalculationResult }) {
+  const deliveryTotal =
+    result.metrics.grubhubSales + result.metrics.doorDashSales + result.metrics.uberEatsSales;
+  const cashGiftTotal = result.metrics.cashSales + result.metrics.giftCardSales;
+  const sections: Array<{
+    title: string;
+    total: number;
+    icon: LucideIcon;
+    rows: Array<[string, number]>;
+    footer: string;
+  }> = [
+    {
+      title: "Delivery Platforms",
+      total: deliveryTotal,
+      icon: Truck,
+      rows: [
+        ["Uber Eats", result.metrics.uberEatsSales],
+        ["DoorDash", result.metrics.doorDashSales],
+        ["Grubhub", result.metrics.grubhubSales]
+      ],
+      footer: `${formatPercent(safeRatio(deliveryTotal, result.metrics.netSales))} of net sales`
+    },
+    {
+      title: "Credit & Debit",
+      total: result.metrics.creditDebitSales,
+      icon: CreditCard,
+      rows: [],
+      footer: `${formatPercent(
+        safeRatio(result.metrics.creditDebitSales, result.metrics.netSales)
+      )} of net sales`
+    },
+    {
+      title: "Cash & Gift Cards",
+      total: cashGiftTotal,
+      icon: Banknote,
+      rows: [
+        ["Cash", result.metrics.cashSales],
+        ["Gift Cards", result.metrics.giftCardSales]
+      ],
+      footer: `${formatPercent(safeRatio(cashGiftTotal, result.metrics.netSales))} of net sales`
+    }
+  ];
+
   return (
-    <section className="panel-card breakdown-card">
-      <div className="breakdown-title">
-        <span className="breakdown-icon">
-          <Icon aria-hidden="true" size={20} />
-        </span>
+    <section className="panel-card sales-summary-card" aria-label="Sales summary">
+      <div className="panel-heading sales-summary-heading">
         <div>
-          <h2>{title}</h2>
-          <strong>{formatCurrency(total)}</strong>
+          <h2>Sales Summary</h2>
+          <span>Payment channels</span>
         </div>
       </div>
-      <div className="breakdown-rows">
-        {rows.map(([label, value]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{formatCurrency(value)}</strong>
-          </div>
-        ))}
+      <div className="sales-summary-list">
+        {sections.map((section) => {
+          const Icon = section.icon;
+
+          return (
+            <article className="sales-summary-section" key={section.title}>
+              <div className="sales-summary-title">
+                <span className="sales-summary-icon">
+                  <Icon aria-hidden="true" size={17} />
+                </span>
+                <span>
+                  <strong>{section.title}</strong>
+                  <em>{formatCurrency(section.total)}</em>
+                </span>
+              </div>
+              {section.rows.length > 0 ? (
+                <div className="sales-summary-rows">
+                  {section.rows.map(([label, value]) => (
+                    <div key={label}>
+                      <span>{label}</span>
+                      <strong>{formatCurrency(value)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <footer>{section.footer}</footer>
+            </article>
+          );
+        })}
       </div>
-      <footer>{footer}</footer>
     </section>
   );
 }
