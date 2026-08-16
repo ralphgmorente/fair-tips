@@ -598,12 +598,15 @@ function SalesMixCard({ result }: { result: CalculationResult }) {
   const knownTotal = deliveryTotal + result.metrics.creditDebitSales + cashGiftTotal;
   const otherTotal = roundMoney(Math.max(0, result.metrics.netSales - knownTotal));
   const total = Math.max(1, result.metrics.netSales || knownTotal);
-  const deliveryEnd = safeRatio(deliveryTotal, total) * 100;
-  const creditEnd = deliveryEnd + safeRatio(result.metrics.creditDebitSales, total) * 100;
-  const cashEnd = creditEnd + safeRatio(cashGiftTotal, total) * 100;
-  const donutStyle = {
-    background: `conic-gradient(#075b4f 0 ${deliveryEnd}%, #2f9f79 ${deliveryEnd}% ${creditEnd}%, #dbe8df ${creditEnd}% ${cashEnd}%, #edf2ee ${cashEnd}% 100%)`
-  };
+  const mixRows = [
+    { label: "Credit & Debit", value: result.metrics.creditDebitSales, tone: "cards" },
+    { label: "Cash", value: result.metrics.cashSales, tone: "cash" },
+    { label: "Gift Cards", value: result.metrics.giftCardSales, tone: "gift" },
+    { label: "DoorDash", value: result.metrics.doorDashSales, tone: "doordash" },
+    { label: "Uber Eats", value: result.metrics.uberEatsSales, tone: "uber" },
+    { label: "Grubhub", value: result.metrics.grubhubSales, tone: "grubhub" },
+    ...(otherTotal > 0 ? [{ label: "Other sales", value: otherTotal, tone: "other" }] : [])
+  ].sort((a, b) => b.value - a.value);
 
   return (
     <section className="panel-card sales-mix-card">
@@ -618,24 +621,19 @@ function SalesMixCard({ result }: { result: CalculationResult }) {
           message="Tender or delivery fields are required for this breakdown."
         />
       ) : (
-      <div className="sales-mix-body">
-        <div className="donut-chart" style={donutStyle} aria-hidden="true">
-          <span />
+        <div className="sales-mix-body">
+          <div className="mix-list">
+            {mixRows.map((row) => (
+              <MixRow
+                key={row.label}
+                label={row.label}
+                value={row.value}
+                total={total}
+                tone={row.tone}
+              />
+            ))}
+          </div>
         </div>
-        <div className="mix-list">
-          <MixRow label="Delivery Platforms" value={deliveryTotal} total={total} tone="delivery" />
-          <MixRow
-            label="Credit & Debit"
-            value={result.metrics.creditDebitSales}
-            total={total}
-            tone="cards"
-          />
-          <MixRow label="Cash & Gift Cards" value={cashGiftTotal} total={total} tone="cash" />
-          {otherTotal > 0 ? (
-            <MixRow label="Other sales" value={otherTotal} total={total} tone="other" />
-          ) : null}
-        </div>
-      </div>
       )}
     </section>
   );
@@ -652,15 +650,27 @@ function MixRow({
   total: number;
   tone: string;
 }) {
+  const percent = safeRatio(value, total);
+  const formattedValue = formatCurrency(value);
+  const formattedPercent = formatPercent(percent);
+  const barStyle = {
+    "--mix-bar-width": `${Math.max(percent * 100, value > 0 ? 2 : 0)}%`
+  } as CSSProperties;
+
   return (
-    <div className="mix-row">
-      <span className="mix-label">
-        <i data-tone={tone} />
-        <span>{label}</span>
-      </span>
-      <span className="mix-values">
-        <strong>{formatCurrency(value)}</strong>
-        <small>{formatPercent(safeRatio(value, total))}</small>
+    <div className="mix-row" aria-label={`${label}: ${formattedValue}, ${formattedPercent}`}>
+      <div className="mix-row-heading">
+        <span className="mix-label">
+          <i data-tone={tone} />
+          <span>{label}</span>
+        </span>
+        <span className="mix-values">
+          <strong>{formattedValue}</strong>
+          <small>{formattedPercent}</small>
+        </span>
+      </div>
+      <span className="mix-track" aria-hidden="true">
+        <span className="mix-fill" data-tone={tone} style={barStyle} />
       </span>
     </div>
   );

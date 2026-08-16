@@ -590,48 +590,34 @@ h2 {
 }
 
 .sales-mix-body {
-  display: grid;
-  grid-template-columns: minmax(118px, 150px) minmax(0, 1fr);
-  align-items: center;
-  gap: 24px;
   min-width: 0;
-}
-
-.donut-chart {
-  display: grid;
-  width: min(142px, 100%);
-  aspect-ratio: 1;
-  place-items: center;
-  border-radius: 50%;
-  justify-self: center;
-}
-
-.donut-chart span {
-  width: 74px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .mix-list {
   display: grid;
-  gap: 10px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .mix-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 16rem);
-  align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
-  padding-bottom: 10px;
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
 }
 
 .mix-row:last-child {
   padding-bottom: 0;
   border-bottom: 0;
+}
+
+.mix-row-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, max-content);
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
 }
 
 .mix-label {
@@ -659,6 +645,18 @@ h2 {
   background: var(--accent-dark);
 }
 
+.mix-row i[data-tone="doordash"] {
+  background: var(--accent-dark);
+}
+
+.mix-row i[data-tone="uber"] {
+  background: var(--accent);
+}
+
+.mix-row i[data-tone="grubhub"] {
+  background: var(--info);
+}
+
 .mix-row i[data-tone="cards"] {
   background: var(--accent-mid);
 }
@@ -667,18 +665,20 @@ h2 {
   background: #dbe8df;
 }
 
+.mix-row i[data-tone="gift"] {
+  background: #dfe8e2;
+}
+
 .mix-row i[data-tone="other"] {
   background: #edf2ee;
 }
 
 .mix-values {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(4.4rem, max-content);
-  gap: 12px;
+  display: flex;
   align-items: baseline;
-  justify-self: stretch;
+  justify-content: flex-end;
+  gap: 12px;
   min-width: 0;
-  max-width: 100%;
 }
 
 .mix-values strong {
@@ -697,6 +697,69 @@ h2 {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.mix-track {
+  display: block;
+  min-width: 0;
+  height: 11px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.mix-fill {
+  display: block;
+  width: var(--mix-bar-width, 0%);
+  height: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+  animation: mixBarGrow 520ms ease-out both;
+}
+
+.mix-fill[data-tone="doordash"],
+.mix-fill[data-tone="delivery"] {
+  background: linear-gradient(90deg, var(--accent-dark) 0%, #075b4f 100%);
+}
+
+.mix-fill[data-tone="uber"] {
+  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-mid) 100%);
+}
+
+.mix-fill[data-tone="grubhub"] {
+  background: linear-gradient(90deg, var(--info) 0%, #4a7892 100%);
+}
+
+.mix-fill[data-tone="cards"] {
+  background: linear-gradient(90deg, var(--accent-mid) 0%, #56b18d 100%);
+}
+
+.mix-fill[data-tone="cash"] {
+  background: linear-gradient(90deg, #cbded0 0%, #dbe8df 100%);
+}
+
+.mix-fill[data-tone="gift"],
+.mix-fill[data-tone="other"] {
+  background: linear-gradient(90deg, #dfe8e2 0%, #edf2ee 100%);
+}
+
+@keyframes mixBarGrow {
+  from {
+    transform: scaleX(0.24);
+    opacity: 0.72;
+  }
+
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mix-fill {
+    animation: none;
+  }
 }
 
 .breakdown-card {
@@ -1920,29 +1983,23 @@ tfoot td {
     grid-template-columns: 1fr;
   }
 
-  .sales-mix-body {
-    grid-template-columns: 130px minmax(0, 1fr);
+  .sales-mix-card {
+    min-height: auto;
   }
 }
 
 @container (max-width: 520px) {
-  .sales-mix-body {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-
   .mix-list {
     width: 100%;
   }
 
-  .mix-row {
+  .mix-row-heading {
     grid-template-columns: 1fr;
-    align-items: stretch;
-    gap: 6px;
+    gap: 7px;
   }
 
   .mix-values {
-    grid-template-columns: minmax(0, 1fr) minmax(4.4rem, max-content);
+    justify-content: space-between;
     width: 100%;
   }
 
@@ -1973,11 +2030,6 @@ tfoot td {
   .business-snapshot-grid,
   .tip-summary-grid {
     grid-template-columns: 1fr;
-  }
-
-  .sales-mix-body {
-    grid-template-columns: 1fr;
-    justify-items: center;
   }
 
   .mix-list {
