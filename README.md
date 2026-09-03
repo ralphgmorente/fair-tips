@@ -54,7 +54,12 @@ Install dependencies:
 npm install
 ```
 
-Start the local Supabase stack (needs Docker):
+The app is wired to a hosted Supabase project (`mhulczwvcecygugiuuew`, "ShiftFlow" in
+the Mark AI Lab org). `.env.local` holds its URL and keys and is not committed. To work
+against that project, run `supabase link --project-ref mhulczwvcecygugiuuew` and skip to
+"Run the development server".
+
+To work offline instead, start the local Supabase stack (needs Docker):
 
 ```bash
 supabase start
