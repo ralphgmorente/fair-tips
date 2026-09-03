@@ -2372,3 +2372,38 @@ tfoot td {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
 }
+
+.password-field {
+  display: grid;
+  gap: 6px;
+}
+
+.access-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.session-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 210px;
+  padding: 0 10px;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.session-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .session-identity {
+    display: none;
+  }
+}

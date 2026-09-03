@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "check": "next build",
-    "verify:sample": "tsx scripts/verify-sample.ts"
+    "verify:sample": "tsx scripts/verify-sample.ts",
+    "seed:user": "tsx --env-file=.env.local scripts/seed-user.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.114.0",
     "lucide-react": "^0.468.0",
     "next": "15.5.21",
     "react": "19.2.8",
