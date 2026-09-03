@@ -1426,6 +1426,10 @@ h2 {
 .view-stack,
 .settings-list {
   display: grid;
+  /* An implicit grid column sizes to max-content, which lets a wide child (the
+     employee table) push the whole page past the viewport. minmax(0, 1fr) clamps
+     the track so the table scrolls inside .table-scroll instead. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
 }
 
