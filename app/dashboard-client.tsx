@@ -1500,15 +1500,6 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
 
 function EmployeeTable({ result }: { result: CalculationResult }) {
   const [employeeQuery, setEmployeeQuery] = useState("");
-  const totalSharePercent = result.metrics.totalAllocatedTips > 0 ? 1 : 0;
-  const totalStoreHours = result.employees.reduce(
-    (total, employee) => total + employee.storeHours,
-    0
-  );
-  const totalEventHours = result.employees.reduce(
-    (total, employee) => total + employee.eventHours,
-    0
-  );
   const visibleEmployees = useMemo(() => {
     const query = normalizeSearch(employeeQuery);
     if (!query) {
@@ -1519,6 +1510,35 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
       normalizeSearch(employee.employee).includes(query)
     );
   }, [employeeQuery, result.employees]);
+
+  // Totals are summed over the rows actually shown, not the whole result. With a search
+  // active, a footer showing the unfiltered payout reads as the total of the visible rows
+  // and badly misstates what is owed.
+  const totals = useMemo(
+    () =>
+      visibleEmployees.reduce(
+        (running, employee) => ({
+          storeHours: running.storeHours + employee.storeHours,
+          eventHours: running.eventHours + employee.eventHours,
+          paidHours: running.paidHours + employee.paidHours,
+          storeTips: running.storeTips + employee.storeTipShare,
+          eventTips: running.eventTips + employee.eventTipShare,
+          totalTips: running.totalTips + employee.tipShare,
+          sharePercent: running.sharePercent + employee.sharePercent
+        }),
+        {
+          storeHours: 0,
+          eventHours: 0,
+          paidHours: 0,
+          storeTips: 0,
+          eventTips: 0,
+          totalTips: 0,
+          sharePercent: 0
+        }
+      ),
+    [visibleEmployees]
+  );
+  const isFiltered = visibleEmployees.length !== result.employees.length;
 
   return (
     <section className="table-panel">
@@ -1608,29 +1628,33 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           </tbody>
           <tfoot>
             <tr>
-              <td data-label="Employee">Total</td>
+              <td data-label="Employee">{isFiltered ? "Filtered total" : "Total"}</td>
               <td data-label="Store hours" className="numeric">
-                {formatNumber(totalStoreHours)}
+                {formatNumber(totals.storeHours)}
               </td>
               <td data-label="Event hours" className="numeric">
-                {formatNumber(totalEventHours)}
+                {formatNumber(totals.eventHours)}
               </td>
               <td data-label="Total hours" className="numeric">
-                {formatNumber(result.metrics.totalPaidHours)}
+                {formatNumber(totals.paidHours)}
               </td>
               <td data-label="Store tips" className="numeric payout">
-                {formatCurrency(result.metrics.allocatedTips)}
+                {formatCurrency(totals.storeTips)}
               </td>
               <td data-label="Event tips" className="numeric payout">
-                {formatCurrency(result.metrics.eventAllocatedTips)}
+                {formatCurrency(totals.eventTips)}
               </td>
               <td data-label="Total tips" className="numeric payout">
-                {formatCurrency(result.metrics.totalAllocatedTips)}
+                {formatCurrency(totals.totalTips)}
               </td>
               <td data-label="Share %" className="numeric">
-                {formatPercent(totalSharePercent)}
+                {formatPercent(totals.sharePercent)}
               </td>
-              <td data-label="Review">{result.metrics.employeesFound} employees</td>
+              <td data-label="Review">
+                {visibleEmployees.length}
+                {visibleEmployees.length === 1 ? " employee" : " employees"}
+                {isFiltered ? ` of ${result.employees.length}` : ""}
+              </td>
             </tr>
           </tfoot>
         </table>
