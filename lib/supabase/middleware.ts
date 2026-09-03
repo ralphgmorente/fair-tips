@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabaseConfig } from "@/lib/supabase/config";
 
 /** Paths that must stay reachable to a signed-out visitor. */
 const PUBLIC_PATHS = ["/login", "/auth"];
@@ -17,10 +18,24 @@ function isPublicPath(pathname: string) {
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const config = getSupabaseConfig();
+
+  // Not configured: send everything to the login page, which explains the problem. This
+  // deliberately fails closed — without Supabase there is no way to verify a session, so
+  // the dashboard must stay unreachable rather than being served to anyone.
+  if (!config) {
+    if (request.nextUrl.pathname === "/login") {
+      return supabaseResponse;
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    config.url,
+    config.publishableKey,
     {
       cookies: {
         getAll() {

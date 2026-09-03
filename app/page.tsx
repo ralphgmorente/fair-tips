@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { getSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardClient, type SessionUser } from "./dashboard-client";
 
@@ -11,6 +12,10 @@ import { DashboardClient, type SessionUser } from "./dashboard-client";
  * the cookie.
  */
 export default async function Home() {
+  if (!getSupabaseConfig()) {
+    redirect("/login");
+  }
+
   const supabase = await createClient();
 
   const { data } = await supabase.auth.getClaims();

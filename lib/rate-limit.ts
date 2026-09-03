@@ -2,6 +2,25 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/**
+ * The throttle needs the server-only secret key. If it is absent the app should still let
+ * people sign in — an unthrottled login is bad, a login nobody can use is worse — so every
+ * entry point below degrades to a no-op and says so in the logs.
+ */
+function adminClientOrNull() {
+  if (!process.env.SUPABASE_SECRET_KEY) {
+    console.warn("SUPABASE_SECRET_KEY is not set; sign-in throttling is disabled.");
+    return null;
+  }
+
+  try {
+    return createAdminClient();
+  } catch (error) {
+    console.error("login throttle client unavailable", error);
+    return null;
+  }
+}
+
 /** Failed attempts allowed per IP + email pair before sign-in is refused. */
 const MAX_ATTEMPTS = 10;
 /** How far back failed attempts are counted, and how long a lockout therefore lasts. */
@@ -26,7 +45,10 @@ function windowStart() {
  * table should degrade to "unthrottled", not lock every manager out of payroll night.
  */
 export async function isRateLimited(ip: string, email: string): Promise<boolean> {
-  const supabase = createAdminClient();
+  const supabase = adminClientOrNull();
+  if (!supabase) {
+    return false;
+  }
 
   const { count, error } = await supabase
     .from("login_attempts")
@@ -43,7 +65,11 @@ export async function isRateLimited(ip: string, email: string): Promise<boolean>
 }
 
 export async function recordFailedAttempt(ip: string, email: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = adminClientOrNull();
+  if (!supabase) {
+    return;
+  }
+
   const identifier = identifierFor(ip, email);
 
   const { error } = await supabase.from("login_attempts").insert({ identifier });
@@ -57,7 +83,11 @@ export async function recordFailedAttempt(ip: string, email: string): Promise<vo
 
 /** Clears the counter after a successful sign-in so a legitimate user is never locked out. */
 export async function clearAttempts(ip: string, email: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = adminClientOrNull();
+  if (!supabase) {
+    return;
+  }
+
   const { error } = await supabase
     .from("login_attempts")
     .delete()
