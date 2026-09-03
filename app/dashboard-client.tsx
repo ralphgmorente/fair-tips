@@ -185,7 +185,9 @@ export function DashboardClient({ user }: { user: SessionUser }) {
           hasErrors={hasErrors}
           user={user}
           isSigningOut={isSigningOut}
+          showReportSetup={showReportSetup}
           onSignOut={handleSignOut}
+          onNewReport={handleReset}
           onExport={handleExport}
         />
 
@@ -274,7 +276,9 @@ function DashboardHeader({
   hasErrors,
   user,
   isSigningOut,
+  showReportSetup,
   onSignOut,
+  onNewReport,
   onExport
 }: {
   title: string;
@@ -282,7 +286,9 @@ function DashboardHeader({
   hasErrors: boolean;
   user: SessionUser;
   isSigningOut: boolean;
+  showReportSetup: boolean;
   onSignOut: () => void;
+  onNewReport: () => void;
   onExport: () => void;
 }) {
   return (
@@ -305,6 +311,12 @@ function DashboardHeader({
           <UserRound aria-hidden="true" size={16} />
           <span>{user.fullName || user.email}</span>
         </span>
+        {showReportSetup ? null : (
+          <button className="secondary-button compact" type="button" onClick={onNewReport}>
+            <RotateCcw aria-hidden="true" size={17} />
+            New report
+          </button>
+        )}
         <button
           className="secondary-button compact"
           type="button"

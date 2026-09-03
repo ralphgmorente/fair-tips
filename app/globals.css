@@ -262,9 +262,16 @@ h2 {
 
 .dashboard-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* Header buttons wrap as whole buttons, never mid-label. */
+.dashboard-actions .primary-button,
+.dashboard-actions .secondary-button {
+  white-space: nowrap;
 }
 
 .primary-button,
