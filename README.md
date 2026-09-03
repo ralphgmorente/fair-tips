@@ -6,6 +6,7 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 
 ## Features
 
+- Sign in with a per-manager account backed by Supabase Auth
 - Upload Clover orders/sales report or the newer Clover payments report
 - Upload Clover timesheet report
 - Validate report structure before calculating
@@ -53,16 +54,31 @@ Install dependencies:
 npm install
 ```
 
+Start the local Supabase stack (needs Docker):
+
+```bash
+supabase start
+```
+
 Create a local environment file:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Set the temporary app password:
+Fill in the values `supabase start` printed:
 
 ```text
-FAIR_TIPS_PASSWORD=your-manager-password
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+SUPABASE_SECRET_KEY=sb_secret_...
+```
+
+Apply the schema and create the first manager account:
+
+```bash
+supabase db reset
+npm run seed:user
 ```
 
 Run the development server:
@@ -83,13 +99,31 @@ Build for production:
 npm run build
 ```
 
+## Accounts
+
+Self-signup is disabled. Accounts are created with the server-only secret key:
+
+```bash
+npm run seed:user -- --email manager@example.com --password 'a good password' --name 'Ana Diaz' --role manager
+```
+
+Re-running the command for an existing email resets that account's password, name, and
+role, so it is safe to use for password resets. Supabase Auth rejects passwords shorter
+than 6 characters.
+
+Roles are stored in Supabase `app_metadata` and mirrored into `public.profiles`. They are
+deliberately not read from `user_metadata`, which the user themselves can edit.
+
 ## Verification
 
 The project includes a sample verification command that compares the app calculation against the original workbook's saved check sheet:
 
 ```bash
-npm run verify:sample
+npm run verify:sample -- /path/to/Clover_Tip_Distribution_Template.xlsx
 ```
+
+The reference workbook holds real payroll data and is not committed, so pass its path (or
+set `TIP_WORKBOOK_PATH`).
 
 This verifies:
 
@@ -118,11 +152,11 @@ Included:
 - Validation
 - Excel export
 - Responsive manager UI
-- Lightweight password screen
+- Per-user login with server-enforced sessions
 
 Not included yet:
 
-- Login
+- Self-service signup and password reset emails
 - Payments
 - Payroll integrations
 - Multi-location accounts
@@ -132,18 +166,28 @@ Not included yet:
 ## Project Structure
 
 ```text
+middleware.ts            Session refresh + route protection
 app/
-  page.tsx          Main app UI
-  globals.css      SaaS dashboard styling
+  page.tsx               Server-side session check, renders the dashboard
+  dashboard-client.tsx   Main app UI
+  login/                 Sign-in page and server action
+  auth/signout/          Sign-out route handler
+  globals.css            SaaS dashboard styling
 lib/
-  tip-calculator.ts    Core tip distribution logic
-  spreadsheet-file.ts  Report file parsing
-  export-results.ts    Excel export
+  supabase/              Browser, server, and middleware Supabase clients
+  tip-calculator.ts      Core tip distribution logic
+  spreadsheet-file.ts    Report file parsing
+  export-results.ts      Excel export
 scripts/
-  verify-sample.ts     Workbook parity verification
-BUSINESS_RULES.md      Detailed calculation rules
+  seed-user.ts           Creates or updates a login
+  verify-sample.ts       Workbook parity verification
+supabase/
+  migrations/            profiles table, RLS, auth triggers
+BUSINESS_RULES.md        Detailed calculation rules
 ```
 
 ## Notes
 
-This app is designed as a clean operational tool for small food-service businesses. The calculation happens locally in the browser, and no login, payment, or server-side storage is included in the MVP.
+This app is designed as a clean operational tool for small food-service businesses. Tip
+calculation still happens entirely in the browser — uploaded Clover reports are never sent
+to a server or stored. Supabase holds only login accounts, not payroll data.

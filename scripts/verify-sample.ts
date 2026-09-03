@@ -5,7 +5,26 @@ import {
   type Grid
 } from "../lib/tip-calculator";
 
-const workbookPath = "/Users/ralphmorente/Desktop/Clover_Tip_Distribution_Template.xlsx";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+// The reference workbook is not committed (it holds real payroll data), so its location is
+// configurable. Defaults to the repo root; override with TIP_WORKBOOK_PATH or argv[2].
+const workbookPath = resolve(
+  process.argv[2] ||
+    process.env.TIP_WORKBOOK_PATH ||
+    "Clover_Tip_Distribution_Template.xlsx"
+);
+
+if (!existsSync(workbookPath)) {
+  console.error(
+    `Reference workbook not found at ${workbookPath}\n` +
+      "Pass a path, or set TIP_WORKBOOK_PATH:\n" +
+      "  npm run verify:sample -- /path/to/Clover_Tip_Distribution_Template.xlsx"
+  );
+  process.exit(1);
+}
+
 const workbook = XLSX.readFile(workbookPath, { cellDates: false });
 
 function sheetGrid(sheetName: string): Grid {
