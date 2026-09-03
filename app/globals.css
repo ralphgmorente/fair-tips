@@ -1095,6 +1095,18 @@ h2 {
   min-height: 156px;
 }
 
+/* The card stretches to its neighbour's height, so let the empty state fill it instead of
+   leaving a few hundred pixels of blank card below the message. */
+.top-items-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.top-items-card .analytics-empty {
+  flex: 1;
+  align-items: center;
+}
+
 .feature-unavailable-panel > span:last-child {
   display: grid;
   gap: 5px;
@@ -1223,11 +1235,24 @@ h2 {
 
 .item-bar,
 .health-meter {
+  position: relative;
   display: block;
   min-width: 0;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface-strong);
+}
+
+/* Marks where the configured target sits, so the fill can be read as over or under it. */
+.health-target {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--marker-left, 66.6667%);
+  width: 2px;
+  border-radius: 1px;
+  background: var(--ink);
+  opacity: 0.45;
 }
 
 .item-bar i,

@@ -49,6 +49,17 @@ import {
 
 type AppView = "dashboard" | "tips" | "settings";
 
+type MeterHealth = {
+  label: string;
+  meterPercent: number;
+  /** Where the configured target sits on the bar, or null when no target is set. */
+  markerPercent: number | null;
+  tone: string;
+};
+
+/** Targets are drawn two thirds along the bar, leaving room to show an overrun. */
+const METER_TARGET_MARKER_PERCENT = 66.6667;
+
 type UploadState = {
   fileName: string;
   rows: Grid | null;
@@ -1144,6 +1155,13 @@ function BusinessHealthCard({
           </label>
           <span className="health-meter" aria-hidden="true">
             <i style={{ "--meter-width": `${laborHealth.meterPercent}%` } as CSSProperties} />
+            {laborHealth.markerPercent === null ? null : (
+              <b
+                className="health-target"
+                style={{ "--marker-left": `${laborHealth.markerPercent}%` } as CSSProperties}
+                aria-hidden="true"
+              />
+            )}
           </span>
         </div>
 
@@ -1168,6 +1186,13 @@ function BusinessHealthCard({
           </label>
           <span className="health-meter" aria-hidden="true">
             <i style={{ "--meter-width": `${ticketHealth.meterPercent}%` } as CSSProperties} />
+            {ticketHealth.markerPercent === null ? null : (
+              <b
+                className="health-target"
+                style={{ "--marker-left": `${ticketHealth.markerPercent}%` } as CSSProperties}
+                aria-hidden="true"
+              />
+            )}
           </span>
         </div>
       </div>
@@ -2139,43 +2164,76 @@ function parsePositiveTarget(value: string): number | null {
 function getLaborHealth(
   result: CalculationResult,
   targetPercent: number | null
-): { label: string; meterPercent: number; tone: string } {
+): MeterHealth {
   if (!result.capabilities.hasTimesheet) {
-    return { label: "Upload Timesheet to track labor", meterPercent: 0, tone: "neutral" };
+    return { label: "Upload Timesheet to track labor", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
   if (!result.capabilities.hasLaborCost) {
-    return { label: "Add wage rate or estimated wages", meterPercent: 0, tone: "neutral" };
+    return { label: "Add wage rate or estimated wages", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
   if (targetPercent === null) {
-    return { label: "Set a labor target", meterPercent: 0, tone: "neutral" };
+    return { label: "Set a labor target", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
   const targetRatio = targetPercent / 100;
   const laborPercent = result.metrics.laborPercent;
-  const meterPercent = Math.min(safeRatio(laborPercent, targetRatio) * 100, 100);
+
+  // The meter is scaled so the target sits at two thirds of the bar. Filling to the target
+  // instead would clamp every overrun to a full bar, making 1 point over look identical to
+  // 30 points over on the one number managers actually watch.
+  const scaleMax = targetRatio * 1.5;
+  const meterPercent = Math.min(safeRatio(laborPercent, scaleMax) * 100, 100);
+  const markerPercent = METER_TARGET_MARKER_PERCENT;
+  const gap = Math.abs(laborPercent - targetRatio) * 100;
+  const gapLabel = `${formatNumber(gap, 1)} pts`;
+
   return laborPercent <= targetRatio
-    ? { label: "Within configured target", meterPercent, tone: "positive" }
-    : { label: "Above configured target", meterPercent, tone: "warning" };
+    ? {
+        label: `${gapLabel} under your ${formatNumber(targetPercent, 0)}% target`,
+        meterPercent,
+        markerPercent,
+        tone: "positive"
+      }
+    : {
+        label: `${gapLabel} over your ${formatNumber(targetPercent, 0)}% target`,
+        meterPercent,
+        markerPercent,
+        tone: "warning"
+      };
 }
 
 function getAverageTicketHealth(
   averageTicket: AverageTicketMetric,
   target: number | null
-): { label: string; meterPercent: number; tone: string } {
+): MeterHealth {
   if (!averageTicket.available) {
-    return { label: "Data unavailable", meterPercent: 0, tone: "neutral" };
+    return { label: "Data unavailable", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
   if (target === null) {
-    return { label: "Set an Average Ticket target", meterPercent: 0, tone: "neutral" };
+    return { label: "Set an Average Ticket target", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
-  const meterPercent = Math.min(safeRatio(averageTicket.value, target) * 100, 100);
+  const scaleMax = target * 1.5;
+  const meterPercent = Math.min(safeRatio(averageTicket.value, scaleMax) * 100, 100);
+  const markerPercent = METER_TARGET_MARKER_PERCENT;
+  const gap = Math.abs(averageTicket.value - target);
+
   return averageTicket.value >= target
-    ? { label: "At or above configured target", meterPercent, tone: "positive" }
-    : { label: "Below configured target", meterPercent, tone: "warning" };
+    ? {
+        label: `${formatCurrency(gap)} above your ${formatCurrency(target)} target`,
+        meterPercent,
+        markerPercent,
+        tone: "positive"
+      }
+    : {
+        label: `${formatCurrency(gap)} below your ${formatCurrency(target)} target`,
+        meterPercent,
+        markerPercent,
+        tone: "warning"
+      };
 }
 
 function updateLocalTarget(key: string, value: string) {
