@@ -1457,6 +1457,11 @@ h2 {
   line-height: 1.5;
 }
 
+.setup-state.error {
+  background: rgba(179, 52, 43, 0.12);
+  color: var(--danger);
+}
+
 .setup-panel {
   margin-bottom: 18px;
 }

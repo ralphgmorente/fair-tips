@@ -1313,8 +1313,16 @@ function ReportSetupPanel({
           <h2>Reports</h2>
           <span>{setupMessage}</span>
         </div>
-        <span className={hasBusinessReport ? "setup-state ready" : "setup-state"}>
-          {hasBusinessReport ? "Ready" : "Waiting"}
+        <span
+          className={
+            errors
+              ? "setup-state error"
+              : hasBusinessReport
+                ? "setup-state ready"
+                : "setup-state"
+          }
+        >
+          {errors ? "Action needed" : hasBusinessReport ? "Ready" : "Waiting"}
         </span>
       </div>
       <div className="upload-row">
@@ -1339,7 +1347,7 @@ function ReportSetupPanel({
             {blockingUploadError
               ? "Fix the upload issue before calculating."
               : result
-                ? `${errors} errors, ${warnings} warnings`
+                ? `${errors} ${errors === 1 ? "error" : "errors"}, ${warnings} ${warnings === 1 ? "warning" : "warnings"}`
                 : hasBusinessReport
                   ? "Run calculation for dashboard analytics. Timesheet unlocks labor and tips."
                   : "Waiting for an Orders Report or Payments Report."}
@@ -1684,7 +1692,8 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
       <div className="section-heading">
         <h2>Validation</h2>
         <span>
-          {errors.length} errors, {warnings.length} warnings
+          {errors.length} {errors.length === 1 ? "error" : "errors"}, {warnings.length}{" "}
+          {warnings.length === 1 ? "warning" : "warnings"}
         </span>
       </div>
       {issues.length === 0 ? (
