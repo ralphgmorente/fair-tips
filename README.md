@@ -114,6 +114,10 @@ than 6 characters.
 Roles are stored in Supabase `app_metadata` and mirrored into `public.profiles`. They are
 deliberately not read from `user_metadata`, which the user themselves can edit.
 
+Sign-in is throttled to 10 failed attempts per IP and email pair per 15 minutes. Attempts
+are recorded in `public.login_attempts` under a hash of the address and email, and the
+table is unreachable from the Data API.
+
 ## Verification
 
 The project includes a sample verification command that compares the app calculation against the original workbook's saved check sheet:
