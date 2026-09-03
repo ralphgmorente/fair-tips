@@ -1433,6 +1433,23 @@ h2 {
   gap: 24px;
 }
 
+/* Each settings row stacks its label above its description. Without this the strong and
+   span are inline and run together as "ExportsExcel payout files use...". */
+.settings-list > div {
+  display: grid;
+  gap: 5px;
+}
+
+.settings-list strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.settings-list span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .setup-panel {
   margin-bottom: 18px;
 }
