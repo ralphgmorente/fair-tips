@@ -2,8 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 
-/** Paths that must stay reachable to a signed-out visitor. */
-const PUBLIC_PATHS = ["/login", "/auth"];
+/**
+ * Paths that must stay reachable to a signed-out visitor.
+ *
+ * /api/keepalive is here because a Vercel cron calls it unauthenticated. It returns only
+ * whether the database answered, and the query it makes is one any visitor could already
+ * make with the publishable key, so exposing it adds nothing.
+ */
+const PUBLIC_PATHS = ["/login", "/auth", "/api/keepalive"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
