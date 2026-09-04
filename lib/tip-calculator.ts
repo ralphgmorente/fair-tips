@@ -1071,6 +1071,19 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
       return;
     }
 
+    // Clover appends a second block after the timesheet in which every employee on the
+    // roster appears once with all four clock columns blank and zero totals. Those rows
+    // are not shifts, so they are skipped silently — warning about them buried the real
+    // signals in noise and sent managers looking for shifts that never existed.
+    const hasAnyShiftData =
+      cellText(row[clockInDateIndex]) !== "" ||
+      cellText(row[clockInTimeIndex]) !== "" ||
+      cellText(row[clockOutDateIndex]) !== "" ||
+      cellText(row[clockOutTimeIndex]) !== "";
+    if (!hasAnyShiftData) {
+      return;
+    }
+
     const role = roleIndex === undefined ? "" : cellText(row[roleIndex]);
     const clockIn = parseShiftDateTime(row[clockInDateIndex], row[clockInTimeIndex]);
     const clockOut = parseShiftDateTime(row[clockOutDateIndex], row[clockOutTimeIndex]);
@@ -1094,11 +1107,18 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
     const valid = Boolean(employee && clockIn && clockOut && clockOut >= clockIn);
 
     if (!valid) {
+      const scheduledDate = cellText(row[clockInDateIndex]) || cellText(row[clockOutDateIndex]);
+      const neverClockedIn =
+        cellText(row[clockInTimeIndex]) === "" && cellText(row[clockOutTimeIndex]) === "";
+
       issues.push({
         severity: "warning",
         source: "timesheet",
         row: rowNumber,
-        message: `Shift for ${employee || "an employee"} is missing a valid clock-in or clock-out time.`
+        message:
+          neverClockedIn && scheduledDate
+            ? `${employee || "An employee"} was rostered on ${scheduledDate} but never clocked in, so that shift earned no tips.`
+            : `Shift for ${employee || "an employee"} is missing a valid clock-in or clock-out time.`
       });
     }
 
