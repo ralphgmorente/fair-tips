@@ -1019,9 +1019,12 @@ export function parseSalesReport(grid: Grid): ParsedSales {
     issues.push({
       severity: "warning",
       source: "sales",
-      message: `${skippedFailedPayments} failed payment ${
-        skippedFailedPayments === 1 ? "row was" : "rows were"
-      } skipped.`
+      // Worded as a confirmation, not a problem: declined cards are supposed to be
+      // excluded, and the old "failed payment rows were skipped" read as something the
+      // manager had to go and fix in Clover.
+      message: `${skippedFailedPayments} declined card ${
+        skippedFailedPayments === 1 ? "payment was" : "payments were"
+      } excluded from sales and tips, as expected.`
     });
   }
 

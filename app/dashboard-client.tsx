@@ -220,12 +220,20 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             />
             {result && hasErrors ? <ValidationPanel issues={result.issues} /> : null}
           </>
-        ) : activeView === "dashboard" ? (
-          <DashboardView result={result} />
-        ) : activeView === "tips" ? (
-          <TipsView result={result} />
-        ) : (
+        ) : activeView === "settings" ? (
           <SettingsView />
+        ) : (
+          <>
+            {/* Warnings were only ever rendered alongside blocking errors, so a run that
+                succeeded hid them entirely — including shifts whose clock times could not
+                be read, whose owners silently earn nothing. Collapsed, but present. */}
+            {result.issues.length ? <ValidationPanel issues={result.issues} /> : null}
+            {activeView === "dashboard" ? (
+              <DashboardView result={result} />
+            ) : (
+              <TipsView result={result} />
+            )}
+          </>
         )}
       </main>
     </div>
@@ -1608,6 +1616,13 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           {result.metrics.employeesFound} employees
         </span>
       </div>
+      {/* The method is the point of the app, not an implementation detail: tips follow who
+          was clocked in for each order, not hours worked. Saying so here heads off the
+          "why did they get more than me on fewer hours" question. */}
+      <p className="method-note">
+        Each order&rsquo;s tip is split equally between the staff clocked in at that
+        moment, so payout follows coverage rather than total hours.
+      </p>
       <div className="table-scroll">
         <table className="summary-table">
           <thead>
