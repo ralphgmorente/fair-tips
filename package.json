@@ -8,7 +8,8 @@
     "start": "next start",
     "check": "next build",
     "verify:sample": "tsx scripts/verify-sample.ts",
-    "seed:user": "tsx --env-file=.env.local scripts/seed-user.ts"
+    "seed:user": "tsx --env-file=.env.local scripts/seed-user.ts",
+    "deploy:status": "tsx scripts/deploy-status.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
