@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseConfig } from "@/lib/supabase/config";
 
 /**
  * Supabase client authenticated with the secret key. It bypasses RLS, so it must never be
@@ -7,14 +8,17 @@ import { createClient } from "@supabase/supabase-js";
  * error rather than a silent key leak.
  */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // The URL comes from the shared helper so this agrees with every other client; only
+  // the secret key must come from the environment, since it bypasses row level security
+  // and must never be committed.
+  const config = getSupabaseConfig();
   const secretKey = process.env.SUPABASE_SECRET_KEY;
 
-  if (!url || !secretKey) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY must be set.");
+  if (!config || !secretKey) {
+    throw new Error("Supabase URL and SUPABASE_SECRET_KEY must both be available.");
   }
 
-  return createClient(url, secretKey, {
+  return createClient(config.url, secretKey, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 }
