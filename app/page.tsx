@@ -31,6 +31,12 @@ export default async function Home() {
     .eq("id", claims.sub)
     .maybeSingle();
 
+  // Staff have no business on the manager dashboard, which shows every person's payout.
+  // The redirect is the friendly path; row level security is what actually stops them.
+  if (profile?.role === "staff") {
+    redirect("/my-tips");
+  }
+
   const user: SessionUser = {
     email: profile?.email ?? (typeof claims.email === "string" ? claims.email : ""),
     fullName: profile?.full_name ?? "",

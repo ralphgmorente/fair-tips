@@ -34,6 +34,7 @@ import {
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
@@ -1551,6 +1552,77 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
   );
 }
 
+/**
+ * Publishes the calculated payouts so staff can sign in and see their own line.
+ *
+ * Only the per-person totals are sent. The uploaded Clover reports never leave the
+ * browser, so no sales or card data is stored.
+ */
+function PublishPanel({ result }: { result: CalculationResult }) {
+  const [state, setState] = useState<PublishState>({ status: "idle", message: "" });
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  async function handlePublish() {
+    setIsPublishing(true);
+    setState({ status: "idle", message: "" });
+
+    const dates = result.salesOrders
+      .map((order) => order.orderDate)
+      .filter((date): date is Date => Boolean(date))
+      .sort((a, b) => a.getTime() - b.getTime());
+    const isoDate = (date: Date | undefined) =>
+      date ? date.toISOString().slice(0, 10) : null;
+
+    const next = await publishPayouts({
+      label: formatDateRange(result),
+      startsOn: isoDate(dates[0]),
+      endsOn: isoDate(dates[dates.length - 1]),
+      totalTips: roundMoney(result.metrics.totalTips),
+      allocatedTips: roundMoney(result.metrics.totalAllocatedTips),
+      unallocatedTips: roundMoney(result.metrics.totalUnallocatedTips),
+      employees: result.employees.map((employee) => ({
+        employee: employee.employee,
+        paidHours: employee.paidHours,
+        storeTipShare: roundMoney(employee.storeTipShare),
+        eventTipShare: roundMoney(employee.eventTipShare),
+        tipShare: roundMoney(employee.tipShare),
+        sharePercent: employee.sharePercent
+      }))
+    });
+
+    setState(next);
+    setIsPublishing(false);
+  }
+
+  return (
+    <section className="publish-panel">
+      <div>
+        <strong>Share this week with staff</strong>
+        <small>
+          Publishes each person&rsquo;s total so they can sign in and see their own tips.
+          Uploaded reports are never stored.
+        </small>
+      </div>
+      <div className="publish-actions">
+        {state.message ? (
+          <span className={state.status === "error" ? "publish-error" : "publish-ok"}>
+            {state.message}
+          </span>
+        ) : null}
+        <button
+          className="secondary-button compact"
+          type="button"
+          onClick={handlePublish}
+          disabled={isPublishing || !result.employees.length}
+        >
+          <Users aria-hidden="true" size={17} />
+          {isPublishing ? "Publishing..." : "Publish to staff"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function EmployeeTable({ result }: { result: CalculationResult }) {
   const [employeeQuery, setEmployeeQuery] = useState("");
   const visibleEmployees = useMemo(() => {
@@ -1616,6 +1688,7 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           {result.metrics.employeesFound} employees
         </span>
       </div>
+      <PublishPanel result={result} />
       {/* The method is the point of the app, not an implementation detail: tips follow who
           was clocked in for each order, not hours worked. Saying so here heads off the
           "why did they get more than me on fewer hours" question. */}

@@ -6,8 +6,15 @@
  *
  *   npm run seed:user
  *   npm run seed:user -- --email manager@example.com --password 'correct horse' --name 'Ana Diaz' --role admin
+ *
+ * A staff account must be linked to the name exactly as it appears in the Clover
+ * timesheet, or they will sign in and see nothing:
+ *
+ *   npm run seed:user -- --email caio@example.com --password 'a good password' \
+ *     --name 'Caio Corazzari' --role staff --employee 'Caio Corazzari'
  */
 import { createClient } from "@supabase/supabase-js";
+import { employeeKey } from "../lib/employee-key";
 
 type Args = Record<string, string>;
 
@@ -46,6 +53,12 @@ async function main() {
   const password = args.password || process.env.SEED_ADMIN_PASSWORD || "123456";
   const fullName = args.name || process.env.SEED_ADMIN_NAME || "ShiftFlow Manager";
   const role = args.role || process.env.SEED_ADMIN_ROLE || "admin";
+  // Staff are matched to their payouts by timesheet name; default to their full name.
+  const employee = args.employee || (role === "staff" ? fullName : "");
+
+  if (role === "staff" && !employee) {
+    throw new Error("A staff account needs --employee '<name as it appears in the timesheet>'.");
+  }
 
   if (password.length < 6) {
     throw new Error(
@@ -64,14 +77,16 @@ async function main() {
     password,
     email_confirm: true,
     user_metadata: { full_name: fullName },
-    app_metadata: { role }
+    app_metadata: employee ? { role, employee_key: employeeKey(employee) } : { role }
   };
 
   const { data: created, error: createError } =
     await supabase.auth.admin.createUser(attributes);
 
   if (!createError) {
-    console.log(`Created ${email} (${role}), id ${created.user?.id}`);
+    console.log(
+      `Created ${email} (${role}${employee ? `, paid as "${employee}"` : ""}), id ${created.user?.id}`
+    );
     return;
   }
 
@@ -105,13 +120,20 @@ async function main() {
 
   const { error: profileError } = await supabase
     .from("profiles")
-    .update({ email, full_name: fullName, role })
+    .update({
+      email,
+      full_name: fullName,
+      role,
+      ...(employee ? { employee_key: employeeKey(employee) } : {})
+    })
     .eq("id", existing.id);
   if (profileError) {
     throw profileError;
   }
 
-  console.log(`Updated existing ${email} (${role}), id ${existing.id}`);
+  console.log(
+    `Updated existing ${email} (${role}${employee ? `, paid as "${employee}"` : ""}), id ${existing.id}`
+  );
 }
 
 main().catch((error) => {
