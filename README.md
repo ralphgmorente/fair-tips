@@ -7,6 +7,8 @@ The app recreates the logic from the original Excel workbook: each tipped order 
 ## Features
 
 - Sign in with a per-manager account backed by Supabase Auth
+- Publish a finished period so staff can sign in and see their own tips
+- Install to a phone home screen as a PWA
 - Upload Clover orders/sales report or the newer Clover payments report
 - Upload Clover timesheet report
 - Validate report structure before calculating
@@ -106,6 +108,9 @@ npm run build
 
 ## Accounts
 
+There are three roles. `admin` and `manager` both see the full dashboard and can publish
+payouts; `staff` see only their own tips at `/my-tips`.
+
 Self-signup is disabled. Accounts are created with the server-only secret key:
 
 ```bash
@@ -116,8 +121,27 @@ Re-running the command for an existing email resets that account's password, nam
 role, so it is safe to use for password resets. Supabase Auth rejects passwords shorter
 than 6 characters.
 
-Roles are stored in Supabase `app_metadata` and mirrored into `public.profiles`. They are
-deliberately not read from `user_metadata`, which the user themselves can edit.
+A staff account must be linked to the person's name exactly as it appears in the Clover
+timesheet, or they will sign in and see nothing:
+
+```bash
+npm run seed:user -- --email caio@example.com --password 'a good password' \
+  --name 'Caio Corazzari' --role staff --employee 'Caio Corazzari'
+```
+
+Roles and the employee link are stored in Supabase `app_metadata` and mirrored into
+`public.profiles`. They are deliberately not read from `user_metadata`, which the user
+themselves can edit — someone able to rewrite their own employee link could read a
+colleague's payout.
+
+## Publishing to staff
+
+Tip calculation happens in the manager's browser and uploaded reports are never stored.
+Pressing **Publish to staff** on the Tips view saves only the per-person totals — name,
+hours, store and event tips, share of the pool — to `pay_periods` and `payouts`.
+
+Row level security does the enforcing: a staff session can read only its own payout row,
+only for a published period, and cannot write either table. Managers read and write both.
 
 Sign-in is throttled to 10 failed attempts per IP and email pair per 15 minutes. Attempts
 are recorded in `public.login_attempts` under a hash of the address and email, and the
@@ -180,6 +204,9 @@ app/
   page.tsx               Server-side session check, renders the dashboard
   dashboard-client.tsx   Main app UI
   login/                 Sign-in page and server action
+  my-tips/               Staff view of their own payouts
+  actions/               Publish payouts to staff
+  manifest.ts            PWA manifest
   auth/signout/          Sign-out route handler
   globals.css            SaaS dashboard styling
 lib/
@@ -189,9 +216,11 @@ lib/
   export-results.ts      Excel export
 scripts/
   seed-user.ts           Creates or updates a login
+  generate-pwa-assets.py Regenerates icons and iOS launch images
+  deploy-status.ts       Build state and production health
   verify-sample.ts       Workbook parity verification
 supabase/
-  migrations/            profiles table, RLS, auth triggers
+  migrations/            profiles, payouts, RLS, auth triggers
 BUSINESS_RULES.md        Detailed calculation rules
 ```
 
