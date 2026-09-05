@@ -1086,7 +1086,15 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
 
     const role = roleIndex === undefined ? "" : cellText(row[roleIndex]);
     const clockIn = parseShiftDateTime(row[clockInDateIndex], row[clockInTimeIndex]);
-    const clockOut = parseShiftDateTime(row[clockOutDateIndex], row[clockOutTimeIndex]);
+    const rawClockOut = parseShiftDateTime(row[clockOutDateIndex], row[clockOutTimeIndex]);
+    // A clock-out earlier than the clock-in means the shift ran past midnight; Clover
+    // repeats the start date on the row. Roll it to the next day, matching the
+    // "IF(end < start, end + 1, end)" rule in the reference workbook. Without this a
+    // late shift is discarded and its staff earn nothing for the whole night.
+    const clockOut =
+      clockIn && rawClockOut && rawClockOut < clockIn
+        ? new Date(rawClockOut.getTime() + 24 * 60 * 60 * 1000)
+        : rawClockOut;
     const paidHoursFromReport =
       totalPaidHoursIndex === undefined
         ? { valid: false, value: 0 }
