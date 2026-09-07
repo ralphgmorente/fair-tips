@@ -38,6 +38,8 @@ export type SalesOrder = {
   itemSales: number | null;
   rawDate: string;
   isEvent: boolean;
+  /** Who rang the sale, when the export names them. Never used to allocate tips. */
+  employeeName: string;
 };
 
 export type Shift = {
@@ -259,6 +261,12 @@ const PAYMENT_ID_HEADERS = ["Payment ID"];
 const TIP_HEADERS = ["Tip", "Tip Amount"];
 const ORDER_TOTAL_HEADERS = ["Order Total", "Amount"];
 const ORDER_NUMBER_HEADERS = ["Order Number", "Invoice Number"];
+const ORDER_EMPLOYEE_HEADERS = [
+  "Order Employee Name",
+  "Payment Employee Name",
+  "Employee Name",
+  "Employee"
+];
 const LABOR_COST_HEADERS = [
   "Estimated wages",
   "Estimated Wages",
@@ -574,6 +582,54 @@ export function calculateFlexibleReports({
     });
   }
 
+  // Somebody ringing up sales but absent from the timesheet earns nothing, and their
+  // share is quietly divided among everyone else. The app cannot know whether that is
+  // correct, but it must not stay silent about it.
+  if (timesheetGrid && parsedTimesheet.shifts.length > 0) {
+    const shiftNames = parsedTimesheet.shifts
+      .filter((shift) => shift.valid)
+      .map((shift) => normalizeName(shift.employee));
+
+    const unscheduled = new Map<string, number>();
+    parsedSales.orders.forEach((order) => {
+      const name = normalizeName(order.employeeName);
+      if (!name) {
+        return;
+      }
+      // Exports spell people inconsistently — "Luan" on payments, "Luan Martins" on the
+      // timesheet — so treat one name containing the other as the same person rather
+      // than accusing the manager of a missing shift.
+      const known = shiftNames.some(
+        (shiftName) => shiftName === name || shiftName.includes(name) || name.includes(shiftName)
+      );
+      if (!known) {
+        unscheduled.set(order.employeeName, (unscheduled.get(order.employeeName) ?? 0) + 1);
+      }
+    });
+
+    [...unscheduled.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([name, count]) => {
+        issues.push({
+          severity: "warning",
+          source: "calculation",
+          message: `${name} rang up ${count} ${count === 1 ? "sale" : "sales"} but has no shift on the timesheet, so they receive no tips.`
+        });
+      });
+  }
+
+  // Event sales are identified by the order number, which a payments export leaves empty.
+  // Reporting "$0.00 event tips" there would read as "there were no events" when the
+  // truth is that events cannot be seen at all from this file.
+  if (reports.tipSource === "payments" && !reports.hasOrders && metrics.eventOrders === 0) {
+    issues.push({
+      severity: "warning",
+      source: "sales",
+      message:
+        "A Payments export does not carry the CLOVERGO order number, so event sales cannot be separated. Upload the Orders export to split event tips."
+    });
+  }
+
   if (parsedSales.orders.some((order) => order.paymentState && !isSuccessfulPaymentState(order.paymentState))) {
     issues.push({
       severity: "warning",
@@ -729,6 +785,8 @@ function parseCloverSalesSummaryReport(grid: Grid): ParsedSales | null {
         orderDate: null,
         orderId: "CLOVER-SALES-REPORT-SUMMARY",
         orderNumber: "",
+        // A summary report has no per-sale employee.
+        employeeName: "",
         // The KPI subtracts taxes from the internal gross field; Clover summary gross is already pre-tax.
         grossSales: roundMoney(grossSalesTotal + taxes),
         discounts: roundMoney(discountTotal),
@@ -875,6 +933,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const itemNameIndex = findColumn(header.lookup, ITEM_NAME_HEADERS)?.index;
   const itemQuantityIndex = findColumn(header.lookup, ITEM_QUANTITY_HEADERS)?.index;
   const itemSalesIndex = findColumn(header.lookup, ITEM_SALES_HEADERS)?.index;
+  const orderEmployeeIndex = findColumn(header.lookup, ORDER_EMPLOYEE_HEADERS)?.index;
   const fields: SalesFieldAvailability = {
     grossSales: Boolean(grossSalesColumn || orderTotalColumn),
     tax: taxIndexes.length > 0,
@@ -1011,7 +1070,9 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       itemQuantity: itemQuantityIndex === undefined ? null : parseOptionalNumber(row[itemQuantityIndex]),
       itemSales: itemSalesIndex === undefined ? null : parseOptionalMoneyValue(row[itemSalesIndex]),
       rawDate,
-      isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER
+      isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER,
+      employeeName:
+        orderEmployeeIndex === undefined ? "" : cellText(row[orderEmployeeIndex])
     });
   });
 
