@@ -645,6 +645,20 @@ export function calculateFlexibleReports({
       });
   }
 
+  // Naming an event terminal only helps if the upload actually names the terminal. An
+  // Orders export has no Device column at all, so the setting silently does nothing and
+  // event sales stay in the store pool looking like after-hours mysteries.
+  if (eventDevice !== "" && parsedSales.orders.length > 0) {
+    const hasDeviceColumn = parsedSales.orders.some((order) => order.device.trim() !== "");
+    if (!hasDeviceColumn) {
+      issues.push({
+        severity: "warning",
+        source: "sales",
+        message: `An event terminal is set, but this report has no Device column, so event sales cannot be told apart. Upload the Payments export to split them.`
+      });
+    }
+  }
+
   // Events are identified only by an Order Number of CLOVERGO. Recent Clover exports
   // leave that column empty on every row — in both the orders and payments reports — so
   // an event worked on the floor becomes invisible. Reporting "$0.00 event tips" would
