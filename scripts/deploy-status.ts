@@ -72,7 +72,7 @@ async function main() {
   const keepalive = await probe("/api/keepalive");
 
   const homeOk = home.status === 200;
-  const loginOk = login.status === 200 && login.body.includes("Manager sign in");
+  const loginOk = login.status === 200 && login.body.includes("<h1>Sign in</h1>");
   const dbOk = keepalive.status === 200;
 
   console.log(`\nproduction      : HTTP ${home.status} ${homeOk ? "ok" : "FAILING"}`);
