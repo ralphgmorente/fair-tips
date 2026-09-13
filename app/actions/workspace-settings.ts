@@ -1,16 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-
-export type WorkspaceSettings = {
-  eventDeviceName: string;
-  ignoredSalesNames: string[];
-};
-
-export const emptySettings: WorkspaceSettings = {
-  eventDeviceName: "",
-  ignoredSalesNames: []
-};
+import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
 
 /** Shared by everyone: these change what the numbers are, so they cannot be per-browser. */
 export async function loadWorkspaceSettings(): Promise<WorkspaceSettings> {

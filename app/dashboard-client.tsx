@@ -36,12 +36,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
-import {
-  emptySettings,
-  loadWorkspaceSettings,
-  saveWorkspaceSettings,
-  type WorkspaceSettings
-} from "@/app/actions/workspace-settings";
+import { loadWorkspaceSettings, saveWorkspaceSettings } from "@/app/actions/workspace-settings";
+import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
@@ -318,7 +314,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
                 be read, whose owners silently earn nothing. Collapsed, but present. */}
             {result.issues.length ? <ValidationPanel issues={result.issues} /> : null}
             {activeView === "dashboard" ? (
-              <DashboardView result={result} />
+              <DashboardView result={result} eventDeviceName={settings.eventDeviceName} />
             ) : (
               <TipsView result={result} uploads={uploads} />
             )}
@@ -453,11 +449,21 @@ function DashboardHeader({
   );
 }
 
-function DashboardView({ result }: { result: CalculationResult }) {
+function DashboardView({
+  result,
+  eventDeviceName
+}: {
+  result: CalculationResult;
+  eventDeviceName: string;
+}) {
   const hourlySales = useMemo(() => buildHourlySales(result), [result]);
   const dailySales = useMemo(() => buildDailySales(result), [result]);
   const topSellingItems = useMemo(() => buildTopSellingItems(result), [result]);
   const orderTypeMix = useMemo(() => buildOrderTypeMix(result), [result]);
+  const channelMix = useMemo(
+    () => buildChannelMix(result, eventDeviceName),
+    [result, eventDeviceName]
+  );
   const tipRate = useMemo(() => buildTipRate(result), [result]);
   const averageTicket = useMemo(() => buildAverageTicket(result), [result]);
   const businessInsights = useMemo(
@@ -477,7 +483,11 @@ function DashboardView({ result }: { result: CalculationResult }) {
       <DashboardTopLayout result={result} />
       <div className="analytics-grid">
         <SalesByHourCard hourlySales={hourlySales} />
-        <DailySalesTrendCard dailySales={dailySales} />
+        {channelMix.length ? (
+          <ChannelCard slices={channelMix} />
+        ) : (
+          <DailySalesTrendCard dailySales={dailySales} />
+        )}
       </div>
       <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <div className="business-dashboard-grid">
@@ -592,13 +602,25 @@ function HistoryView() {
   const [periods, setPeriods] = useState<HistoryPeriod[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
   useEffect(() => {
     let active = true;
-    loadHistory().then((rows) => {
-      if (active) {
-        setPeriods(rows);
-      }
-    });
+    loadHistory()
+      .then((rows) => {
+        if (active) {
+          setPeriods(rows);
+        }
+      })
+      .catch((error) => {
+        // Without this the view sat on "Loading..." for ever when the call failed,
+        // which is how a broken server action looked like a hung page.
+        console.error("loading history failed", error);
+        if (active) {
+          setPeriods([]);
+          setLoadFailed(true);
+        }
+      });
     return () => {
       active = false;
     };
@@ -608,6 +630,15 @@ function HistoryView() {
     return (
       <section className="panel-card empty-view">
         <strong>Loading saved periods…</strong>
+      </section>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <section className="panel-card empty-view">
+        <strong>Could not load saved periods</strong>
+        <span>Something went wrong reading the history. Reload the page to try again.</span>
       </section>
     );
   }
@@ -1583,6 +1614,48 @@ function BusinessHealthCard({
  * Replaces the item-sales card when the export has no product columns, which is every
  * Clover orders and payments export. Shows how orders arrive and what they tip.
  */
+/** Where the money came in, and how each channel tips. */
+function ChannelCard({ slices }: { slices: ChannelSlice[] }) {
+  const best = slices.reduce(
+    (top, slice) => (slice.tipRate > top.tipRate ? slice : top),
+    slices[0]
+  );
+
+  return (
+    <section className="panel-card channel-card" aria-label="Sales channels">
+      <div className="panel-heading">
+        <div>
+          <h2>Where sales come from</h2>
+          <span>In store, online and events — and how each tips</span>
+        </div>
+      </div>
+      <ul className="channel-list">
+        {slices.map((slice) => (
+          <li className="channel-row" key={slice.label}>
+            <span className="channel-name">
+              {slice.label}
+              <small>
+                {slice.orders} {slice.orders === 1 ? "order" : "orders"}
+              </small>
+            </span>
+            <span className="channel-figures">
+              <strong>{formatCurrency(slice.sales)}</strong>
+              <small>
+                {formatCurrency(slice.tips)} tips · {formatPercent(slice.tipRate)}
+              </small>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {best ? (
+        <p className="channel-note">
+          {best.label} tips best at {formatPercent(best.tipRate)}.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function OrderTypeCard({
   slices,
   tipRate
@@ -2563,6 +2636,56 @@ function buildDailySales(result: CalculationResult): DailySales[] {
         dayIndexes.length > 1 && weakestSales !== peakSales && summary.netSales === weakestSales
     };
   });
+}
+
+type ChannelSlice = {
+  label: string;
+  orders: number;
+  sales: number;
+  tips: number;
+  tipRate: number;
+};
+
+/**
+ * Splits sales by the terminal that took them, which Clover records in a Payments export:
+ * the event machine, the in-store till, and a blank device meaning the order arrived
+ * online. Returns nothing when the export has no Device column, so an Orders-only upload
+ * does not claim every sale was online.
+ */
+function buildChannelMix(result: CalculationResult, eventDeviceName: string): ChannelSlice[] {
+  const hasDevice = result.salesOrders.some((order) => order.device.trim() !== "");
+  if (!hasDevice) {
+    return [];
+  }
+
+  const eventDevice = eventDeviceName.trim().toLowerCase();
+  const grouped = new Map<string, { orders: number; sales: number; tips: number }>();
+
+  result.salesOrders.forEach((order) => {
+    const device = order.device.trim();
+    const label =
+      device === ""
+        ? "Online"
+        : eventDevice !== "" && device.toLowerCase() === eventDevice
+          ? "Events"
+          : "In store";
+
+    const entry = grouped.get(label) ?? { orders: 0, sales: 0, tips: 0 };
+    entry.orders += 1;
+    entry.sales += order.orderTotal;
+    entry.tips += order.tip;
+    grouped.set(label, entry);
+  });
+
+  return [...grouped.entries()]
+    .map(([label, entry]) => ({
+      label,
+      orders: entry.orders,
+      sales: roundMoney(entry.sales),
+      tips: roundMoney(entry.tips),
+      tipRate: entry.sales > 0 ? entry.tips / entry.sales : 0
+    }))
+    .sort((a, b) => b.sales - a.sales);
 }
 
 type OrderTypeSlice = { label: string; orders: number; sales: number; share: number };
