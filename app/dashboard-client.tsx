@@ -35,6 +35,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
+import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
@@ -48,7 +49,7 @@ import {
   type ValidationIssue
 } from "@/lib/tip-calculator";
 
-type AppView = "dashboard" | "tips" | "settings";
+type AppView = "dashboard" | "tips" | "history" | "settings";
 
 type MeterHealth = {
   label: string;
@@ -66,13 +67,37 @@ type UploadState = {
   rows: Grid | null;
   error: string;
   status: "idle" | "reading" | "ready" | "error";
+  /** sha256 of the file's bytes, used to recognise a report that was already saved. */
+  contentHash: string;
 };
 
 const emptyUpload: UploadState = {
   fileName: "",
   rows: null,
   error: "",
-  status: "idle"
+  status: "idle",
+  contentHash: ""
+};
+
+/** Fingerprints a file so a re-upload of the same export can be spotted. */
+async function hashFile(file: File): Promise<string> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    // Without a hash the app simply falls back to matching on dates.
+    return "";
+  }
+}
+
+/** What the history records about a file: never its contents. */
+type UploadSummary = {
+  kind: "orders" | "payments" | "timesheet";
+  fileName: string;
+  rowCount: number;
+  contentHash: string;
 };
 
 export type SessionUser = {
@@ -102,6 +127,20 @@ export function DashboardClient({ user }: { user: SessionUser }) {
     ordersUpload.error || paymentsUpload.error || timesheetUpload.error
   );
   const showReportSetup = !result || hasErrors;
+  const uploads: UploadSummary[] = (
+    [
+      ["orders", ordersUpload],
+      ["payments", paymentsUpload],
+      ["timesheet", timesheetUpload]
+    ] as const
+  )
+    .filter(([, upload]) => upload.status === "ready")
+    .map(([kind, upload]) => ({
+      kind,
+      fileName: upload.fileName,
+      rowCount: upload.rows?.length ?? 0,
+      contentHash: upload.contentHash
+    }));
   const pageTitle =
     activeView === "dashboard"
       ? result
@@ -109,7 +148,9 @@ export function DashboardClient({ user }: { user: SessionUser }) {
         : "Set up this pay period"
       : activeView === "tips"
         ? "Weekly Tip Distribution"
-        : "Settings";
+        : activeView === "history"
+          ? "Saved periods"
+          : "Settings";
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -139,22 +180,30 @@ export function DashboardClient({ user }: { user: SessionUser }) {
           ? setPaymentsUpload
           : setTimesheetUpload;
     setResult(null);
-    setUpload({ fileName: file.name, rows: null, error: "", status: "reading" });
+    setUpload({
+      fileName: file.name,
+      rows: null,
+      error: "",
+      status: "reading",
+      contentHash: ""
+    });
 
     try {
-      const rows = await readSpreadsheetFile(file);
+      const [rows, contentHash] = await Promise.all([readSpreadsheetFile(file), hashFile(file)]);
       setUpload({
         fileName: file.name,
         rows,
         error: rows.length === 0 ? "No rows found in the first sheet." : "",
-        status: rows.length === 0 ? "error" : "ready"
+        status: rows.length === 0 ? "error" : "ready",
+        contentHash
       });
     } catch {
       setUpload({
         fileName: file.name,
         rows: null,
         error: "This file could not be read.",
-        status: "error"
+        status: "error",
+        contentHash: ""
       });
     }
   }
@@ -215,6 +264,8 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             before a calculation and the tabs looked broken. */}
         {activeView === "settings" ? (
           <SettingsView />
+        ) : activeView === "history" ? (
+          <HistoryView />
         ) : activeView === "tips" && !result ? (
           <EmptyView
             title="No tips calculated yet"
@@ -249,7 +300,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             {activeView === "dashboard" ? (
               <DashboardView result={result} />
             ) : (
-              <TipsView result={result} />
+              <TipsView result={result} uploads={uploads} />
             )}
           </>
         )}
@@ -270,6 +321,7 @@ function AppSidebar({
   const navItems: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
     { id: "dashboard", label: "Dashboard", icon: ChartPie },
     { id: "tips", label: "Tips", icon: WalletCards },
+    { id: "history", label: "History", icon: CalendarDays },
     { id: "settings", label: "Settings", icon: Settings }
   ];
 
@@ -421,7 +473,13 @@ function DashboardView({ result }: { result: CalculationResult }) {
   );
 }
 
-function TipsView({ result }: { result: CalculationResult }) {
+function TipsView({
+  result,
+  uploads
+}: {
+  result: CalculationResult;
+  uploads: UploadSummary[];
+}) {
   if (!result.capabilities.hasTimesheet) {
     return (
       <div className="view-stack">
@@ -450,7 +508,7 @@ function TipsView({ result }: { result: CalculationResult }) {
     <div className="view-stack">
       <TipSummaryStrip result={result} />
       <EdgeCasePanel result={result} />
-      <EmployeeTable result={result} />
+      <EmployeeTable result={result} uploads={uploads} />
       <UnallocatedOrders result={result} />
     </div>
   );
@@ -561,6 +619,127 @@ function EmptyView({
         {actionLabel}
       </button>
     </section>
+  );
+}
+
+/**
+ * Saved periods. Deliberately plain: a list you can open, with the payout table and the
+ * files it came from. Everything expensive already happened when the period was saved.
+ */
+function HistoryView() {
+  const [periods, setPeriods] = useState<HistoryPeriod[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    loadHistory().then((rows) => {
+      if (active) {
+        setPeriods(rows);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (periods === null) {
+    return (
+      <section className="panel-card empty-view">
+        <strong>Loading saved periods…</strong>
+      </section>
+    );
+  }
+
+  if (periods.length === 0) {
+    return (
+      <section className="panel-card empty-view">
+        <strong>Nothing saved yet</strong>
+        <span>
+          Calculate a period and press &ldquo;Publish to staff&rdquo; to keep it here.
+        </span>
+      </section>
+    );
+  }
+
+  return (
+    <div className="view-stack">
+      {periods.map((period) => {
+        const isOpen = openId === period.id;
+        const sortedPayouts = [...period.payouts].sort(
+          (a, b) => Number(b.total_tips) - Number(a.total_tips)
+        );
+
+        return (
+          <section className="panel-card history-period" key={period.id}>
+            <button
+              className="history-head"
+              type="button"
+              aria-expanded={isOpen}
+              onClick={() => setOpenId(isOpen ? null : period.id)}
+            >
+              <span className="history-title">
+                <strong>{period.label}</strong>
+                <small>
+                  Saved {new Date(period.published_at).toLocaleDateString()} ·{" "}
+                  {period.payouts.length}{" "}
+                  {period.payouts.length === 1 ? "person" : "people"}
+                </small>
+              </span>
+              <span className="history-figure">
+                {formatCurrency(Number(period.allocated_tips))}
+                <ChevronDown
+                  aria-hidden="true"
+                  size={18}
+                  className={isOpen ? "history-chevron open" : "history-chevron"}
+                />
+              </span>
+            </button>
+
+            {isOpen ? (
+              <div className="history-body">
+                <div className="table-scroll">
+                  <table className="summary-table">
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th className="numeric">Hours</th>
+                        <th className="numeric">Tips</th>
+                        <th className="numeric">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedPayouts.map((payout) => (
+                        <tr key={payout.employee_name}>
+                          <td data-label="Employee">{payout.employee_name}</td>
+                          <td data-label="Hours" className="numeric">
+                            {formatNumber(Number(payout.paid_hours))}
+                          </td>
+                          <td data-label="Tips" className="numeric payout">
+                            {formatCurrency(Number(payout.total_tips))}
+                          </td>
+                          <td data-label="Share" className="numeric">
+                            {formatPercent(Number(payout.share_percent))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {period.report_uploads.length ? (
+                  <p className="history-sources">
+                    Built from{" "}
+                    {period.report_uploads
+                      .map((upload) => `${upload.file_name} (${upload.row_count} rows)`)
+                      .join(", ")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1721,11 +1900,17 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
  * Only the per-person totals are sent. The uploaded Clover reports never leave the
  * browser, so no sales or card data is stored.
  */
-function PublishPanel({ result }: { result: CalculationResult }) {
+function PublishPanel({
+  result,
+  uploads
+}: {
+  result: CalculationResult;
+  uploads: UploadSummary[];
+}) {
   const [state, setState] = useState<PublishState>({ status: "idle", message: "" });
   const [isPublishing, setIsPublishing] = useState(false);
 
-  async function handlePublish() {
+  async function handlePublish(replaceExisting = false) {
     setIsPublishing(true);
     setState({ status: "idle", message: "" });
 
@@ -1750,7 +1935,21 @@ function PublishPanel({ result }: { result: CalculationResult }) {
         eventTipShare: roundMoney(employee.eventTipShare),
         tipShare: roundMoney(employee.tipShare),
         sharePercent: employee.sharePercent
-      }))
+      })),
+      uploads,
+      // Kept as one document so the history view can show what the dashboard showed,
+      // without a migration every time a figure is added.
+      metrics: {
+        netSales: roundMoney(result.metrics.netSales),
+        totalLaborCost: roundMoney(result.metrics.totalLaborCost),
+        laborPercent: result.metrics.laborPercent,
+        tipRate: buildTipRate(result),
+        orderCount: result.salesOrders.length,
+        employeeCount: result.employees.length,
+        orderTypeMix: buildOrderTypeMix(result),
+        eventTips: roundMoney(result.metrics.eventTips)
+      },
+      replaceExisting
     });
 
     setState(next);
@@ -1767,7 +1966,7 @@ function PublishPanel({ result }: { result: CalculationResult }) {
         </small>
       </div>
       <div className="publish-actions">
-        {state.message ? (
+        {state.message && state.status !== "confirm" ? (
           <span className={state.status === "error" ? "publish-error" : "publish-ok"}>
             {state.message}
           </span>
@@ -1775,18 +1974,52 @@ function PublishPanel({ result }: { result: CalculationResult }) {
         <button
           className="secondary-button compact"
           type="button"
-          onClick={handlePublish}
+          onClick={() => handlePublish(false)}
           disabled={isPublishing || !result.employees.length}
         >
           <Users aria-hidden="true" size={17} />
           {isPublishing ? "Publishing..." : "Publish to staff"}
         </button>
       </div>
+
+      {/* Replacing a saved period changes figures staff may have already seen, so it
+          always asks first rather than quietly overwriting. */}
+      {state.status === "confirm" ? (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Replace saved period">
+          <div className="confirm-card">
+            <strong>Already saved</strong>
+            <span>{state.message}</span>
+            <div className="confirm-actions">
+              <button
+                className="secondary-button compact"
+                type="button"
+                onClick={() => setState({ status: "idle", message: "" })}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-button compact"
+                type="button"
+                disabled={isPublishing}
+                onClick={() => handlePublish(true)}
+              >
+                {isPublishing ? "Replacing..." : "Replace it"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function EmployeeTable({ result }: { result: CalculationResult }) {
+function EmployeeTable({
+  result,
+  uploads
+}: {
+  result: CalculationResult;
+  uploads: UploadSummary[];
+}) {
   const [employeeQuery, setEmployeeQuery] = useState("");
   const visibleEmployees = useMemo(() => {
     const query = normalizeSearch(employeeQuery);
@@ -1851,7 +2084,7 @@ function EmployeeTable({ result }: { result: CalculationResult }) {
           {result.metrics.employeesFound} employees
         </span>
       </div>
-      <PublishPanel result={result} />
+      <PublishPanel result={result} uploads={uploads} />
       {/* The method is the point of the app, not an implementation detail: tips follow who
           was clocked in for each order, not hours worked. Saying so here heads off the
           "why did they get more than me on fewer hours" question. */}

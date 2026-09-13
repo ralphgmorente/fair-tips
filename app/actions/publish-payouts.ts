@@ -13,6 +13,13 @@ export type PublishablePayout = {
   sharePercent: number;
 };
 
+export type PublishableUpload = {
+  kind: "orders" | "payments" | "timesheet";
+  fileName: string;
+  rowCount: number;
+  contentHash: string;
+};
+
 export type PublishInput = {
   label: string;
   startsOn: string | null;
@@ -21,9 +28,54 @@ export type PublishInput = {
   allocatedTips: number;
   unallocatedTips: number;
   employees: PublishablePayout[];
+  uploads: PublishableUpload[];
+  metrics: Record<string, unknown>;
+  /** Set once the manager has confirmed they mean to replace an existing period. */
+  replaceExisting?: boolean;
 };
 
-export type PublishState = { status: "idle" | "ok" | "error"; message: string };
+export type PublishState = {
+  status: "idle" | "ok" | "error" | "confirm";
+  message: string;
+};
+
+/**
+ * Recognises a period that has already been saved.
+ *
+ * Matching on the files rather than the dates catches the common case — the same two
+ * exports uploaded twice — even if the label differs. Returns what the manager needs to
+ * decide, never acting on its own.
+ */
+async function findExistingPeriod(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  periodKey: string,
+  uploads: PublishableUpload[]
+) {
+  const { data: byKey } = await supabase
+    .from("pay_periods")
+    .select("id, label")
+    .eq("period_key", periodKey)
+    .maybeSingle();
+
+  if (byKey) {
+    return { period: byKey, reason: "same period" as const };
+  }
+
+  const hashes = uploads.map((upload) => upload.contentHash).filter(Boolean);
+  if (hashes.length === 0) {
+    return null;
+  }
+
+  const { data: byHash } = await supabase
+    .from("report_uploads")
+    .select("pay_period_id, pay_periods(id, label)")
+    .in("content_hash", hashes)
+    .limit(1)
+    .maybeSingle();
+
+  const period = (byHash as { pay_periods?: { id: string; label: string } } | null)?.pay_periods;
+  return period ? { period, reason: "same files" as const } : null;
+}
 
 export async function publishPayouts(input: PublishInput): Promise<PublishState> {
   const supabase = await createClient();
@@ -55,11 +107,20 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
   const periodKey =
     input.startsOn && input.endsOn ? `${input.startsOn}_${input.endsOn}` : input.label;
 
-  const { data: existing } = await supabase
-    .from("pay_periods")
-    .select("id")
-    .eq("period_key", periodKey)
-    .maybeSingle();
+  const match = await findExistingPeriod(supabase, periodKey, input.uploads);
+
+  // Replacing a saved period changes what staff already see, so it is never silent.
+  if (match && !input.replaceExisting) {
+    return {
+      status: "confirm",
+      message:
+        match.reason === "same files"
+          ? `These exact files were already saved as "${match.period.label}". Replace that period with this calculation?`
+          : `"${match.period.label}" is already saved. Replace it with this calculation?`
+    };
+  }
+
+  const existing = match?.period ?? null;
 
   const { data: period, error: periodError } = await supabase
     .from("pay_periods")
@@ -73,6 +134,7 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
         total_tips: input.totalTips,
         allocated_tips: input.allocatedTips,
         unallocated_tips: input.unallocatedTips,
+        metrics: input.metrics,
         published_by: claims.sub,
         published_at: new Date().toISOString()
       },
@@ -122,6 +184,26 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
   }
 
   revalidatePath("/my-tips");
+  // Replace the fingerprints too, so the history always describes the files behind the
+  // figures currently stored.
+  await supabase.from("report_uploads").delete().eq("pay_period_id", period.id);
+
+  if (input.uploads.length) {
+    const { error: uploadError } = await supabase.from("report_uploads").insert(
+      input.uploads.map((upload) => ({
+        pay_period_id: period.id,
+        kind: upload.kind,
+        file_name: upload.fileName,
+        row_count: upload.rowCount,
+        content_hash: upload.contentHash,
+        uploaded_by: claims.sub
+      }))
+    );
+    if (uploadError) {
+      console.error("recording uploads failed", uploadError);
+    }
+  }
+
   const count = `${rows.length} ${rows.length === 1 ? "payout" : "payouts"}`;
   return {
     status: "ok",

@@ -350,7 +350,9 @@ h2 {
 
 .executive-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Cards size to their content instead of being forced into thirds, so a long figure
+     widens its card rather than spilling out of it. */
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 14px;
 }
 
@@ -361,8 +363,11 @@ h2 {
   gap: 5px 11px;
   min-width: 0;
   min-height: 118px;
-  overflow: hidden;
   padding: 14px;
+}
+
+.executive-card strong {
+  font-size: clamp(1.25rem, 4.2cqi, 1.75rem);
 }
 
 .executive-card.has-secondary {
@@ -551,9 +556,17 @@ h2 {
 
 .dashboard-top-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2.05fr) minmax(300px, 0.95fr);
+  /* One column until there is genuinely room for two. Side by side at 1100px the KPI
+     figures were clipped mid-number and the summary labels truncated to "Credit & D...". */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
+}
+
+@media (min-width: 1180px) {
+  .dashboard-top-layout {
+    grid-template-columns: minmax(0, 2.05fr) minmax(320px, 0.95fr);
+  }
 }
 
 .dashboard-top-main {
@@ -2709,4 +2722,113 @@ tfoot td {
   font-size: 0.84rem;
   font-weight: 850;
   white-space: nowrap;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(9, 24, 20, 0.42);
+}
+
+.confirm-card {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 430px);
+  padding: 24px;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.confirm-card strong {
+  font-size: 1.1rem;
+}
+
+.confirm-card span {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.history-period {
+  padding: 0;
+  overflow: hidden;
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 20px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-head:hover {
+  background: var(--surface-soft);
+}
+
+.history-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history-title strong {
+  font-size: 1.02rem;
+}
+
+.history-title small {
+  color: var(--muted);
+}
+
+.history-figure {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  font-size: 1.05rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-chevron {
+  transition: transform 0.18s ease;
+}
+
+.history-chevron.open {
+  transform: rotate(180deg);
+}
+
+.history-body {
+  padding: 0 20px 20px;
+}
+
+.history-sources {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-chevron {
+    transition: none;
+  }
 }
