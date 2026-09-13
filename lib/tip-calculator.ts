@@ -40,6 +40,8 @@ export type SalesOrder = {
   isEvent: boolean;
   /** Who rang the sale, when the export names them. Never used to allocate tips. */
   employeeName: string;
+  /** The terminal that took the payment, when the export names it. */
+  device: string;
 };
 
 export type Shift = {
@@ -150,6 +152,12 @@ export type FlexibleReportInput = {
   ordersGrid?: Grid | null;
   paymentsGrid?: Grid | null;
   timesheetGrid?: Grid | null;
+  /**
+   * Name of the terminal used at offsite events, e.g. "Clover Flex". When set, sales
+   * taken on it count as event sales. Recent Clover exports leave the CLOVERGO order
+   * number blank, which otherwise makes events impossible to identify.
+   */
+  eventDeviceName?: string;
   /**
    * Till accounts that are not people — a former owner's login still baked into a
    * terminal, a shared "front counter" account. Sales under these names are never
@@ -267,6 +275,7 @@ const PAYMENT_ID_HEADERS = ["Payment ID"];
 const TIP_HEADERS = ["Tip", "Tip Amount"];
 const ORDER_TOTAL_HEADERS = ["Order Total", "Amount"];
 const ORDER_NUMBER_HEADERS = ["Order Number", "Invoice Number"];
+const DEVICE_HEADERS = ["Device", "Device Name", "Terminal"];
 const ORDER_EMPLOYEE_HEADERS = [
   "Order Employee Name",
   "Payment Employee Name",
@@ -360,8 +369,10 @@ export function calculateFlexibleReports({
   ordersGrid,
   paymentsGrid,
   timesheetGrid,
-  ignoredSalesNames = []
+  ignoredSalesNames = [],
+  eventDeviceName = ""
 }: FlexibleReportInput): CalculationResult {
+  const eventDevice = eventDeviceName.trim().toLowerCase();
   const parsedReports = parseUploadedBusinessReports(ordersGrid, paymentsGrid);
   const parsedTimesheet = timesheetGrid ? parseTimesheetReport(timesheetGrid) : emptyParsedTimesheet();
   const parsedSales = chooseSalesSource(parsedReports.orders, parsedReports.payments);
@@ -460,8 +471,14 @@ export function calculateFlexibleReports({
     return emptyResult(parsedSales.orders, parsedTimesheet.shifts, issues, reports);
   }
 
-  const storeOrders = parsedSales.orders.filter((order) => !order.isEvent);
-  const eventOrders = parsedSales.orders.filter((order) => order.isEvent);
+  // An order counts as an event when it carries the CLOVERGO order number, or when it was
+  // taken on the terminal the manager nominated as the event machine. The second route
+  // exists because current Clover exports leave the order number blank on every row.
+  const isEventOrder = (order: SalesOrder) =>
+    order.isEvent || (eventDevice !== "" && order.device.trim().toLowerCase() === eventDevice);
+
+  const storeOrders = parsedSales.orders.filter((order) => !isEventOrder(order));
+  const eventOrders = parsedSales.orders.filter(isEventOrder);
   const canAllocateTips = Boolean(timesheetGrid && validShifts.length > 0);
   const storeAllocationDetails = canAllocateTips
     ? allocateOrders(storeOrders, "store", validShifts, employeeOrder)
@@ -799,8 +816,9 @@ function parseCloverSalesSummaryReport(grid: Grid): ParsedSales | null {
         orderDate: null,
         orderId: "CLOVER-SALES-REPORT-SUMMARY",
         orderNumber: "",
-        // A summary report has no per-sale employee.
+        // A summary report has no per-sale employee or terminal.
         employeeName: "",
+        device: "",
         // The KPI subtracts taxes from the internal gross field; Clover summary gross is already pre-tax.
         grossSales: roundMoney(grossSalesTotal + taxes),
         discounts: roundMoney(discountTotal),
@@ -948,6 +966,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
   const itemQuantityIndex = findColumn(header.lookup, ITEM_QUANTITY_HEADERS)?.index;
   const itemSalesIndex = findColumn(header.lookup, ITEM_SALES_HEADERS)?.index;
   const orderEmployeeIndex = findColumn(header.lookup, ORDER_EMPLOYEE_HEADERS)?.index;
+  const deviceIndex = findColumn(header.lookup, DEVICE_HEADERS)?.index;
   const fields: SalesFieldAvailability = {
     grossSales: Boolean(grossSalesColumn || orderTotalColumn),
     tax: taxIndexes.length > 0,
@@ -1086,7 +1105,8 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       rawDate,
       isEvent: normalizeEventOrderNumber(orderNumber) === EVENT_ORDER_NUMBER,
       employeeName:
-        orderEmployeeIndex === undefined ? "" : cellText(row[orderEmployeeIndex])
+        orderEmployeeIndex === undefined ? "" : cellText(row[orderEmployeeIndex]),
+      device: deviceIndex === undefined ? "" : cellText(row[deviceIndex])
     });
   });
 

@@ -218,7 +218,8 @@ export function DashboardClient({ user }: { user: SessionUser }) {
         ordersGrid: ordersUpload.rows,
         paymentsGrid: paymentsUpload.rows,
         timesheetGrid: timesheetUpload.rows,
-        ignoredSalesNames: readIgnoredSalesNames()
+        ignoredSalesNames: readIgnoredSalesNames(),
+        eventDeviceName: readEventDevice()
       })
     );
   }
@@ -583,6 +584,19 @@ function IgnoredSalesNamesSetting() {
 }
 
 const IGNORED_SALES_NAMES_KEY = "shiftFlowIgnoredSalesNames";
+const EVENT_DEVICE_KEY = "shiftFlowEventDevice";
+
+/** Terminal used at offsite events, if the manager has nominated one. */
+function readEventDevice(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    return localStorage.getItem(EVENT_DEVICE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 /** Till accounts to ignore, stored per browser. Empty everywhere it cannot be read. */
 function readIgnoredSalesNames(): string[] {
@@ -743,6 +757,57 @@ function HistoryView() {
   );
 }
 
+/**
+ * Nominates the terminal used at offsite events.
+ *
+ * Off by default. Events are meant to be marked by a CLOVERGO order number, but current
+ * Clover exports leave that column blank on every row, so an event is otherwise invisible
+ * and its tips fall into the store pool. Naming the machine restores the split — but it
+ * moves real money between people, so it is the manager's decision, not a guess.
+ */
+function EventDeviceSetting() {
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setValue(readEventDevice());
+  }, []);
+
+  function handleSave() {
+    try {
+      localStorage.setItem(EVENT_DEVICE_KEY, value.trim());
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+    } catch {
+      // Storage being unavailable simply leaves event detection off.
+    }
+  }
+
+  return (
+    <div>
+      <strong>Event terminal</strong>
+      <span>
+        The machine you take to offsite events, exactly as it appears in the Device column
+        of a Payments export — often &ldquo;Clover Flex&rdquo;. Sales taken on it become
+        event sales, and their tips go to staff on an Evento shift. Leave blank to rely on
+        the CLOVERGO order number instead.
+      </span>
+      <div className="ignored-names-row">
+        <input
+          type="text"
+          value={value}
+          placeholder="Clover Flex"
+          onChange={(event) => setValue(event.target.value)}
+          aria-label="Event terminal"
+        />
+        <button className="secondary-button compact" type="button" onClick={handleSave}>
+          {saved ? "Saved" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsView() {
   return (
     <section className="panel-card settings-panel">
@@ -763,6 +828,7 @@ function SettingsView() {
           </span>
         </div>
         <IgnoredSalesNamesSetting />
+        <EventDeviceSetting />
       </div>
     </section>
   );
