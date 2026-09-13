@@ -104,7 +104,9 @@ export function DashboardClient({ user }: { user: SessionUser }) {
   const showReportSetup = !result || hasErrors;
   const pageTitle =
     activeView === "dashboard"
-      ? "Business Dashboard"
+      ? result
+        ? "Business Dashboard"
+        : "Set up this pay period"
       : activeView === "tips"
         ? "Weekly Tip Distribution"
         : "Settings";
@@ -190,7 +192,11 @@ export function DashboardClient({ user }: { user: SessionUser }) {
 
   return (
     <div className="app-frame">
-      <AppSidebar activeView={activeView} onViewChange={setActiveView} />
+      <AppSidebar
+        activeView={activeView}
+        hasResult={Boolean(result)}
+        onViewChange={setActiveView}
+      />
       <main className="dashboard-main">
         <DashboardHeader
           title={pageTitle}
@@ -204,7 +210,19 @@ export function DashboardClient({ user }: { user: SessionUser }) {
           onExport={handleExport}
         />
 
-        {showReportSetup ? (
+        {/* Each tab owns its content. Previously the upload panel replaced whichever view
+            was selected, so Dashboard, Tips and Settings all showed the same screen
+            before a calculation and the tabs looked broken. */}
+        {activeView === "settings" ? (
+          <SettingsView />
+        ) : activeView === "tips" && !result ? (
+          <EmptyView
+            title="No tips calculated yet"
+            message="Upload a sales report and a timesheet on the Dashboard, then calculate."
+            actionLabel="Go to Dashboard"
+            onAction={() => setActiveView("dashboard")}
+          />
+        ) : showReportSetup ? (
           <>
             <ReportSetupPanel
               ordersUpload={ordersUpload}
@@ -222,8 +240,6 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             />
             {result && hasErrors ? <ValidationPanel issues={result.issues} /> : null}
           </>
-        ) : activeView === "settings" ? (
-          <SettingsView />
         ) : (
           <>
             {/* Warnings were only ever rendered alongside blocking errors, so a run that
@@ -244,9 +260,11 @@ export function DashboardClient({ user }: { user: SessionUser }) {
 
 function AppSidebar({
   activeView,
+  hasResult,
   onViewChange
 }: {
   activeView: AppView;
+  hasResult: boolean;
   onViewChange: (view: AppView) => void;
 }) {
   const navItems: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
@@ -282,11 +300,13 @@ function AppSidebar({
         })}
       </nav>
 
-      <div className="sidebar-support">
-        <CircleHelp aria-hidden="true" size={18} />
-        <strong>Review week</strong>
-        <span>Check sales metrics, tip allocation, and unallocated orders before export.</span>
-      </div>
+      {hasResult ? (
+        <div className="sidebar-support">
+          <CircleHelp aria-hidden="true" size={18} />
+          <strong>Before you pay out</strong>
+          <span>Check the warnings and any unallocated tips, then export.</span>
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -317,14 +337,17 @@ function DashboardHeader({
       <div className="dashboard-title">
         <div className="title-row">
           <h1>{title}</h1>
-          <span className={result && !hasErrors ? "review-pill ready" : "review-pill"}>
-            {result && !hasErrors ? "Ready to review" : "Setup required"}
-          </span>
+          {result && !hasErrors ? <span className="review-pill ready">Ready to review</span> : null}
         </div>
-        <div className="period-control" aria-label="Pay period">
-          <CalendarDays aria-hidden="true" size={17} />
-          <span>{result ? formatDateRange(result) : "Current pay period"}</span>
-        </div>
+        {/* Before a calculation there is no period and nothing to export, so neither is
+            shown. Repeating "Setup required" beside a screen that already says it in
+            four other places was most of why this felt busy. */}
+        {result ? (
+          <div className="period-control" aria-label="Pay period">
+            <CalendarDays aria-hidden="true" size={17} />
+            <span>{formatDateRange(result)}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="dashboard-actions">
@@ -347,15 +370,12 @@ function DashboardHeader({
           <LockKeyhole aria-hidden="true" size={17} />
           {isSigningOut ? "Signing out..." : "Sign out"}
         </button>
-        <button
-          className="primary-button compact"
-          type="button"
-          disabled={!result || hasErrors || !result.capabilities.hasTipDistribution}
-          onClick={onExport}
-        >
-          <Download aria-hidden="true" size={18} />
-          Export Excel
-        </button>
+        {result && !hasErrors && result.capabilities.hasTipDistribution ? (
+          <button className="primary-button compact" type="button" onClick={onExport}>
+            <Download aria-hidden="true" size={18} />
+            Export Excel
+          </button>
+        ) : null}
       </div>
     </section>
   );
@@ -513,6 +533,29 @@ function readIgnoredSalesNames(): string[] {
   } catch {
     return [];
   }
+}
+
+/** Shown when a view has nothing to display yet, instead of borrowing another view. */
+function EmptyView({
+  title,
+  message,
+  actionLabel,
+  onAction
+}: {
+  title: string;
+  message: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <section className="panel-card empty-view">
+      <strong>{title}</strong>
+      <span>{message}</span>
+      <button className="secondary-button compact" type="button" onClick={onAction}>
+        {actionLabel}
+      </button>
+    </section>
+  );
 }
 
 function SettingsView() {
@@ -1401,32 +1444,28 @@ function ReportSetupPanel({
       : `${warnings} warning${warnings === 1 ? "" : "s"} found`
     : hasBusinessReport
       ? hasTimesheet
-        ? "Business and timesheet reports ready"
-        : "Business dashboard ready"
-      : "Upload Orders or Payments to begin";
+        ? "Both files read. Calculate when you are ready."
+        : "Add the timesheet to work out tips, or calculate sales only."
+      : "Pick an Orders or Payments export, plus the timesheet.";
 
   return (
     <section className="panel-card setup-panel" aria-label="Report setup">
       <div className="panel-heading">
         <div>
-          <h2>Reports</h2>
+          <h2>{result ? "Reports" : "Upload your Clover reports"}</h2>
           <span>{setupMessage}</span>
         </div>
-        <span
-          className={
-            errors
-              ? "setup-state error"
-              : hasBusinessReport
-                ? "setup-state ready"
-                : "setup-state"
-          }
-        >
-          {errors ? "Action needed" : hasBusinessReport ? "Ready" : "Waiting"}
-        </span>
+        {/* One status, not three. The pill only appears when it carries new information:
+            something is wrong, or everything is ready to run. */}
+        {errors ? (
+          <span className="setup-state error">Action needed</span>
+        ) : hasBusinessReport ? (
+          <span className="setup-state ready">Ready</span>
+        ) : null}
       </div>
       <div className="upload-row">
-        <UploadPanel title="Orders Report" upload={ordersUpload} onUpload={onOrdersUpload} />
-        <UploadPanel title="Payments Report" upload={paymentsUpload} onUpload={onPaymentsUpload} />
+        <UploadPanel title="Orders" upload={ordersUpload} onUpload={onOrdersUpload} />
+        <UploadPanel title="Payments" upload={paymentsUpload} onUpload={onPaymentsUpload} />
         <UploadPanel
           title="Timesheet"
           upload={timesheetUpload}
@@ -1437,19 +1476,15 @@ function ReportSetupPanel({
         <div className={result && errors ? "setup-validation error" : "setup-validation"}>
           {result && errors ? (
             <AlertTriangle aria-hidden="true" size={18} />
-          ) : hasBusinessReport ? (
-            <CheckCircle2 aria-hidden="true" size={18} />
-          ) : (
-            <Upload aria-hidden="true" size={18} />
-          )}
+          ) : blockingUploadError ? (
+            <AlertTriangle aria-hidden="true" size={18} />
+          ) : null}
           <span>
             {blockingUploadError
               ? "Fix the upload issue before calculating."
               : result
                 ? `${errors} ${errors === 1 ? "error" : "errors"}, ${warnings} ${warnings === 1 ? "warning" : "warnings"}`
-                : hasBusinessReport
-                  ? "Run calculation for dashboard analytics. Timesheet unlocks labor and tips."
-                  : "Waiting for an Orders Report or Payments Report."}
+                : ""}
           </span>
         </div>
         <div className="setup-actions">
@@ -1462,10 +1497,13 @@ function ReportSetupPanel({
             <Calculator aria-hidden="true" size={18} />
             Calculate dashboard
           </button>
-          <button className="secondary-button" type="button" onClick={onReset}>
-            <RotateCcw aria-hidden="true" size={17} />
-            Reset
-          </button>
+          {/* Nothing chosen yet means nothing to clear. */}
+          {hasBusinessReport || timesheetUpload.status !== "idle" ? (
+            <button className="secondary-button" type="button" onClick={onReset}>
+              <RotateCcw aria-hidden="true" size={17} />
+              Reset
+            </button>
+          ) : null}
         </div>
       </div>
     </section>
@@ -1484,13 +1522,15 @@ function UploadPanel({
   const isReady = upload.status === "ready";
   const isError = upload.status === "error";
   const isReading = upload.status === "reading";
+  // An empty slot says nothing: three "Waiting" badges beside three empty slots was noise
+  // stating the obvious. A badge appears only once the slot has news to report.
   const statusText = isError
     ? upload.error
     : isReady
-      ? `Ready - ${upload.rows?.length ?? 0} rows`
+      ? `${upload.rows?.length ?? 0} rows`
       : isReading
-        ? "Reading file"
-        : "Waiting";
+        ? "Reading"
+        : "";
   const Icon = isReady ? CheckCircle2 : isError ? AlertTriangle : Upload;
 
   return (
@@ -1505,11 +1545,15 @@ function UploadPanel({
       </span>
       <span className="upload-copy">
         <strong>{title}</strong>
-        <span>{upload.fileName || "CSV, XLS, or XLSX"}</span>
+        <span title={upload.fileName || undefined}>
+          {upload.fileName || "Choose a file"}
+        </span>
       </span>
-      <span className={isError ? "upload-status error-text" : "upload-status"}>
-        {statusText}
-      </span>
+      {statusText ? (
+        <span className={isError ? "upload-status error-text" : "upload-status"}>
+          {statusText}
+        </span>
+      ) : null}
     </label>
   );
 }

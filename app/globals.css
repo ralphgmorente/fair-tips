@@ -2655,3 +2655,34 @@ tfoot td {
   border-color: var(--accent);
   outline: 3px solid var(--ring);
 }
+
+/* Money must never break across lines: "$1,717.24" was rendering as "$1,717.2 / 4". */
+.tip-summary-card strong,
+.executive-card strong,
+.snapshot-card strong,
+.staff-total strong,
+.summary-table .numeric,
+.mix-value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-view {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 26px 22px;
+}
+
+.empty-view strong {
+  font-size: 1.05rem;
+}
+
+.empty-view span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.empty-view button {
+  margin-top: 6px;
+}
