@@ -2832,3 +2832,10 @@ tfoot td {
     transition: none;
   }
 }
+
+.settings-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}

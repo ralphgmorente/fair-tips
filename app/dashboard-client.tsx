@@ -36,6 +36,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
+import {
+  emptySettings,
+  loadWorkspaceSettings,
+  saveWorkspaceSettings,
+  type WorkspaceSettings
+} from "@/app/actions/workspace-settings";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
@@ -109,6 +115,7 @@ export type SessionUser = {
 export function DashboardClient({ user }: { user: SessionUser }) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [settings, setSettings] = useState<WorkspaceSettings>(emptySettings);
   const [activeView, setActiveView] = useState<AppView>("dashboard");
   const [ordersUpload, setOrdersUpload] = useState<UploadState>(emptyUpload);
   const [paymentsUpload, setPaymentsUpload] = useState<UploadState>(emptyUpload);
@@ -151,6 +158,18 @@ export function DashboardClient({ user }: { user: SessionUser }) {
         : activeView === "history"
           ? "Saved periods"
           : "Settings";
+
+  useEffect(() => {
+    let active = true;
+    loadWorkspaceSettings().then((next) => {
+      if (active) {
+        setSettings(next);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -218,8 +237,8 @@ export function DashboardClient({ user }: { user: SessionUser }) {
         ordersGrid: ordersUpload.rows,
         paymentsGrid: paymentsUpload.rows,
         timesheetGrid: timesheetUpload.rows,
-        ignoredSalesNames: readIgnoredSalesNames(),
-        eventDeviceName: readEventDevice()
+        ignoredSalesNames: settings.ignoredSalesNames,
+        eventDeviceName: settings.eventDeviceName
       })
     );
   }
@@ -264,7 +283,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             was selected, so Dashboard, Tips and Settings all showed the same screen
             before a calculation and the tabs looked broken. */}
         {activeView === "settings" ? (
-          <SettingsView />
+          <SettingsView settings={settings} onSettingsChange={setSettings} />
         ) : activeView === "history" ? (
           <HistoryView />
         ) : activeView === "tips" && !result ? (
@@ -541,77 +560,6 @@ function FeatureUnavailablePanel({
  * Till accounts that are not people, so the app stops reporting them as someone missing
  * from the timesheet. A bought-out owner's login left on a terminal is the usual case.
  */
-function IgnoredSalesNamesSetting() {
-  const [value, setValue] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    setValue(readIgnoredSalesNames().join(", "));
-  }, []);
-
-  function handleSave() {
-    try {
-      localStorage.setItem(IGNORED_SALES_NAMES_KEY, value);
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
-    } catch {
-      // A browser refusing storage is not worth an error here.
-    }
-  }
-
-  return (
-    <div>
-      <strong>Till accounts to ignore</strong>
-      <span>
-        Names that appear on sales but are not staff — an old owner&rsquo;s login still on
-        a terminal, for example. Separate with commas. Takes effect on the next
-        calculation.
-      </span>
-      <div className="ignored-names-row">
-        <input
-          type="text"
-          value={value}
-          placeholder="HENRY RODRIGUES"
-          onChange={(event) => setValue(event.target.value)}
-          aria-label="Till accounts to ignore"
-        />
-        <button className="secondary-button compact" type="button" onClick={handleSave}>
-          {saved ? "Saved" : "Save"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-const IGNORED_SALES_NAMES_KEY = "shiftFlowIgnoredSalesNames";
-const EVENT_DEVICE_KEY = "shiftFlowEventDevice";
-
-/** Terminal used at offsite events, if the manager has nominated one. */
-function readEventDevice(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-  try {
-    return localStorage.getItem(EVENT_DEVICE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-/** Till accounts to ignore, stored per browser. Empty everywhere it cannot be read. */
-function readIgnoredSalesNames(): string[] {
-  if (typeof window === "undefined") {
-    return [];
-  }
-  try {
-    return (localStorage.getItem(IGNORED_SALES_NAMES_KEY) ?? "")
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
 
 /** Shown when a view has nothing to display yet, instead of borrowing another view. */
 function EmptyView({
@@ -765,50 +713,114 @@ function HistoryView() {
  * and its tips fall into the store pool. Naming the machine restores the split — but it
  * moves real money between people, so it is the manager's decision, not a guess.
  */
-function EventDeviceSetting() {
-  const [value, setValue] = useState("");
-  const [saved, setSaved] = useState(false);
+/**
+ * Settings that decide how tips are split, saved for the whole business.
+ *
+ * These lived in localStorage at first, which meant two managers could feed in the same
+ * files and get different payouts — the event terminal alone moves about $66 between
+ * people. They belong to the business, not to a browser.
+ */
+function WorkspaceSettingsForm({
+  settings,
+  onSettingsChange
+}: {
+  settings: WorkspaceSettings;
+  onSettingsChange: (next: WorkspaceSettings) => void;
+}) {
+  const [device, setDevice] = useState(settings.eventDeviceName);
+  const [names, setNames] = useState(settings.ignoredSalesNames.join(", "));
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState({ message: "", ok: true });
 
   useEffect(() => {
-    setValue(readEventDevice());
-  }, []);
+    setDevice(settings.eventDeviceName);
+    setNames(settings.ignoredSalesNames.join(", "));
+  }, [settings]);
 
-  function handleSave() {
-    try {
-      localStorage.setItem(EVENT_DEVICE_KEY, value.trim());
-      setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
-    } catch {
-      // Storage being unavailable simply leaves event detection off.
+  async function handleSave() {
+    setSaving(true);
+    setFeedback({ message: "", ok: true });
+
+    const next: WorkspaceSettings = {
+      eventDeviceName: device.trim(),
+      ignoredSalesNames: names
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+    };
+
+    const result = await saveWorkspaceSettings(next);
+    if (result.ok) {
+      onSettingsChange(next);
     }
+    setSaving(false);
+    setFeedback({ message: result.message, ok: result.ok });
   }
 
   return (
-    <div>
-      <strong>Event terminal</strong>
-      <span>
-        The machine you take to offsite events, exactly as it appears in the Device column
-        of a Payments export — often &ldquo;Clover Flex&rdquo;. Sales taken on it become
-        event sales, and their tips go to staff on an Evento shift. Leave blank to rely on
-        the CLOVERGO order number instead.
-      </span>
-      <div className="ignored-names-row">
-        <input
-          type="text"
-          value={value}
-          placeholder="Clover Flex"
-          onChange={(event) => setValue(event.target.value)}
-          aria-label="Event terminal"
-        />
-        <button className="secondary-button compact" type="button" onClick={handleSave}>
-          {saved ? "Saved" : "Save"}
-        </button>
+    <>
+      <div>
+        <strong>Event terminal</strong>
+        <span>
+          The machine taken to offsite events, exactly as it appears in the Device column
+          of a Payments export. Sales on it become event sales, and their tips go to staff
+          on an Evento shift. Leave blank to rely on the CLOVERGO order number instead.
+        </span>
+        <div className="ignored-names-row">
+          <input
+            type="text"
+            value={device}
+            placeholder="Clover Flex"
+            onChange={(event) => setDevice(event.target.value)}
+            aria-label="Event terminal"
+          />
+        </div>
       </div>
-    </div>
+
+      <div>
+        <strong>Till accounts to ignore</strong>
+        <span>
+          Names that appear on sales but are not staff — an old owner&rsquo;s login still
+          on a terminal, for example. Separate with commas.
+        </span>
+        <div className="ignored-names-row">
+          <input
+            type="text"
+            value={names}
+            placeholder="HENRY RODRIGUES"
+            onChange={(event) => setNames(event.target.value)}
+            aria-label="Till accounts to ignore"
+          />
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+        {feedback.message ? (
+          <span className={feedback.ok ? "publish-ok" : "publish-error"}>
+            {feedback.message}
+          </span>
+        ) : (
+          <span className="settings-hint">
+            Saved for everyone, and applied on the next calculation.
+          </span>
+        )}
+      </div>
+    </>
   );
 }
 
-function SettingsView() {
+function SettingsView({
+  settings,
+  onSettingsChange
+}: {
+  settings: WorkspaceSettings;
+  onSettingsChange: (next: WorkspaceSettings) => void;
+}) {
   return (
     <section className="panel-card settings-panel">
       <div className="panel-heading">
@@ -827,8 +839,7 @@ function SettingsView() {
             administrator; there is no self-signup.
           </span>
         </div>
-        <IgnoredSalesNamesSetting />
-        <EventDeviceSetting />
+        <WorkspaceSettingsForm settings={settings} onSettingsChange={onSettingsChange} />
       </div>
     </section>
   );
