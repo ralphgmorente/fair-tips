@@ -31,7 +31,7 @@ import {
   Users,
   WalletCards
 } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
@@ -114,13 +114,19 @@ export type SessionUser = {
   role: string;
 };
 
-export function DashboardClient({ user }: { user: SessionUser }) {
+export function DashboardClient({
+  user,
+  initialView = "dashboard"
+}: {
+  user: SessionUser;
+  initialView?: AppView;
+}) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [settings, setSettings] = useState<WorkspaceSettings>(emptySettings);
   /** Upload details recovered from a previous session, when the files are no longer held. */
   const [restoredUploads, setRestoredUploads] = useState<SavedUpload[]>([]);
-  const [activeView, setActiveView] = useState<AppView>("dashboard");
+  const [activeView, setActiveView] = useState<AppView>(initialView);
   const [ordersUpload, setOrdersUpload] = useState<UploadState>(emptyUpload);
   const [paymentsUpload, setPaymentsUpload] = useState<UploadState>(emptyUpload);
   const [timesheetUpload, setTimesheetUpload] = useState<UploadState>(emptyUpload);
@@ -184,6 +190,25 @@ export function DashboardClient({ user }: { user: SessionUser }) {
     return () => {
       active = false;
     };
+  }, []);
+
+  const showView = useCallback((view: AppView) => {
+    setActiveView(view);
+    if (typeof window !== "undefined" && window.location.pathname !== `/${view}`) {
+      window.history.pushState({ view }, "", `/${view}`);
+    }
+  }, []);
+
+  // Back and forward should move between tabs, not out of the app.
+  useEffect(() => {
+    const onPopState = () => {
+      const view = window.location.pathname.replace("/", "") as AppView;
+      if (["dashboard", "tips", "history", "settings"].includes(view)) {
+        setActiveView(view);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   async function handleSignOut() {
@@ -280,11 +305,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
 
   return (
     <div className="app-frame">
-      <AppSidebar
-        activeView={activeView}
-        hasResult={Boolean(result)}
-        onViewChange={setActiveView}
-      />
+      <AppSidebar activeView={activeView} result={result} onViewChange={showView} />
       <main className="dashboard-main">
         <DashboardHeader
           title={pageTitle}
@@ -310,7 +331,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             title="No tips calculated yet"
             message="Upload a sales report and a timesheet on the Dashboard, then calculate."
             actionLabel="Go to Dashboard"
-            onAction={() => setActiveView("dashboard")}
+            onAction={() => showView("dashboard")}
           />
         ) : showReportSetup ? (
           <>
@@ -350,11 +371,11 @@ export function DashboardClient({ user }: { user: SessionUser }) {
 
 function AppSidebar({
   activeView,
-  hasResult,
+  result,
   onViewChange
 }: {
   activeView: AppView;
-  hasResult: boolean;
+  result: CalculationResult | null;
   onViewChange: (view: AppView) => void;
 }) {
   const navItems: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
@@ -391,14 +412,76 @@ function AppSidebar({
         })}
       </nav>
 
-      {hasResult ? (
-        <div className="sidebar-support">
-          <CircleHelp aria-hidden="true" size={18} />
-          <strong>Before you pay out</strong>
-          <span>Check the warnings and any unallocated tips, then export.</span>
-        </div>
-      ) : null}
+      {result ? <PayoutChecklist result={result} onViewChange={onViewChange} /> : null}
     </aside>
+  );
+}
+
+/**
+ * What still needs looking at before money moves.
+ *
+ * This was a fixed sentence telling the manager to check the warnings and the unallocated
+ * tips — advice that never changed and so stopped being read. It now carries the actual
+ * counts and jumps to whichever view answers them.
+ */
+function PayoutChecklist({
+  result,
+  onViewChange
+}: {
+  result: CalculationResult;
+  onViewChange: (view: AppView) => void;
+}) {
+  const errors = result.issues.filter((issue) => issue.severity === "error").length;
+  const warnings = result.issues.filter((issue) => issue.severity === "warning").length;
+  const unallocated = result.metrics.totalUnallocatedTips;
+  const ready = errors === 0 && unallocated === 0;
+
+  return (
+    <div className="sidebar-support">
+      <strong>{ready ? "Ready to pay out" : "Before you pay out"}</strong>
+
+      <ul className="checklist">
+        <li className={warnings ? "checklist-item warn" : "checklist-item done"}>
+          <button type="button" onClick={() => onViewChange("dashboard")}>
+            {warnings ? (
+              <AlertTriangle aria-hidden="true" size={15} />
+            ) : (
+              <CheckCircle2 aria-hidden="true" size={15} />
+            )}
+            <span>
+              {warnings
+                ? `${warnings} ${warnings === 1 ? "warning" : "warnings"} to review`
+                : "No warnings"}
+            </span>
+          </button>
+        </li>
+
+        <li className={unallocated > 0 ? "checklist-item warn" : "checklist-item done"}>
+          <button type="button" onClick={() => onViewChange("tips")}>
+            {unallocated > 0 ? (
+              <AlertTriangle aria-hidden="true" size={15} />
+            ) : (
+              <CheckCircle2 aria-hidden="true" size={15} />
+            )}
+            <span>
+              {unallocated > 0
+                ? `${formatCurrency(unallocated)} unallocated`
+                : "Every tip allocated"}
+            </span>
+          </button>
+        </li>
+
+        <li className="checklist-item done">
+          <button type="button" onClick={() => onViewChange("tips")}>
+            <Users aria-hidden="true" size={15} />
+            <span>
+              {formatCurrency(result.metrics.totalAllocatedTips)} to{" "}
+              {result.employees.length}
+            </span>
+          </button>
+        </li>
+      </ul>
+    </div>
   );
 }
 
