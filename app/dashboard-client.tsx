@@ -385,6 +385,8 @@ function DashboardView({ result }: { result: CalculationResult }) {
   const hourlySales = useMemo(() => buildHourlySales(result), [result]);
   const dailySales = useMemo(() => buildDailySales(result), [result]);
   const topSellingItems = useMemo(() => buildTopSellingItems(result), [result]);
+  const orderTypeMix = useMemo(() => buildOrderTypeMix(result), [result]);
+  const tipRate = useMemo(() => buildTipRate(result), [result]);
   const averageTicket = useMemo(() => buildAverageTicket(result), [result]);
   const businessInsights = useMemo(
     () =>
@@ -407,7 +409,11 @@ function DashboardView({ result }: { result: CalculationResult }) {
       </div>
       <BusinessSnapshot result={result} averageTicket={averageTicket} hourlySales={hourlySales} />
       <div className="business-dashboard-grid">
-        <TopSellingItemsCard items={topSellingItems} />
+        {topSellingItems.length ? (
+          <TopSellingItemsCard items={topSellingItems} />
+        ) : (
+          <OrderTypeCard slices={orderTypeMix} tipRate={tipRate} />
+        )}
         <BusinessInsightsCard insights={businessInsights} />
       </div>
       <BusinessHealthCard result={result} averageTicket={averageTicket} />
@@ -1317,6 +1323,59 @@ function BusinessHealthCard({
   );
 }
 
+/**
+ * Replaces the item-sales card when the export has no product columns, which is every
+ * Clover orders and payments export. Shows how orders arrive and what they tip.
+ */
+function OrderTypeCard({
+  slices,
+  tipRate
+}: {
+  slices: OrderTypeSlice[];
+  tipRate: number;
+}) {
+  return (
+    <section className="panel-card order-type-card" aria-label="How orders arrive">
+      <div className="panel-heading">
+        <div>
+          <h2>How orders arrive</h2>
+          <span>Share of sales by order type</span>
+        </div>
+        <span className="tip-rate-chip" title="Tips as a share of net sales">
+          <CircleDollarSign aria-hidden="true" size={16} />
+          {formatPercent(tipRate)} tips
+        </span>
+      </div>
+      {slices.length === 0 ? (
+        <div className="analytics-empty">
+          <span className="breakdown-icon">
+            <PackageSearch aria-hidden="true" size={20} />
+          </span>
+          <span>
+            <strong>No order types recorded</strong>
+            <small>This export does not say how the orders were placed.</small>
+          </span>
+        </div>
+      ) : (
+        <ul className="mix-list">
+          {slices.map((slice) => (
+            <li className="mix-row" key={slice.label}>
+              <span className="mix-label">{slice.label}</span>
+              <span className="mix-bar">
+                <i style={{ "--bar-width": `${slice.share * 100}%` } as CSSProperties} />
+              </span>
+              <span className="mix-value">{formatCurrency(slice.sales)}</span>
+              <span className="mix-share">
+                {slice.orders} {slice.orders === 1 ? "order" : "orders"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function TopSellingItemsCard({ items }: { items: TopSellingItem[] }) {
   return (
     <section className="panel-card top-items-card" aria-label="Top selling items">
@@ -1651,14 +1710,9 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
     );
   }
 
-  return (
-    <section className="notice-panel warning">
-      <AlertTriangle aria-hidden="true" size={18} />
-      <span>
-        {formatCurrency(result.metrics.totalUnallocatedTips)} needs manager review before payout.
-      </span>
-    </section>
-  );
+  // The Unallocated summary card and the table of those orders both already carry this
+  // figure. A third banner saying it again added noise, not information.
+  return null;
 }
 
 /**
@@ -2199,6 +2253,41 @@ function buildDailySales(result: CalculationResult): DailySales[] {
         dayIndexes.length > 1 && weakestSales !== peakSales && summary.netSales === weakestSales
     };
   });
+}
+
+type OrderTypeSlice = { label: string; orders: number; sales: number; share: number };
+
+/**
+ * How the money arrives: dine in, pickup, delivery. Present in every Clover export and,
+ * unlike item detail, actually usable — the card that used to sit here could never show
+ * anything because neither export carries product names.
+ */
+function buildOrderTypeMix(result: CalculationResult): OrderTypeSlice[] {
+  const grouped = new Map<string, { orders: number; sales: number }>();
+
+  result.salesOrders.forEach((order) => {
+    const label = order.orderType.trim() || "Unspecified";
+    const entry = grouped.get(label) ?? { orders: 0, sales: 0 };
+    entry.orders += 1;
+    entry.sales += order.orderTotal;
+    grouped.set(label, entry);
+  });
+
+  const total = [...grouped.values()].reduce((sum, entry) => sum + entry.sales, 0);
+
+  return [...grouped.entries()]
+    .map(([label, entry]) => ({
+      label,
+      orders: entry.orders,
+      sales: roundMoney(entry.sales),
+      share: total > 0 ? entry.sales / total : 0
+    }))
+    .sort((a, b) => b.sales - a.sales);
+}
+
+/** Tips as a share of net sales — the number this whole app exists to divide up. */
+function buildTipRate(result: CalculationResult): number {
+  return result.metrics.netSales > 0 ? result.metrics.totalTips / result.metrics.netSales : 0;
 }
 
 function buildTopSellingItems(result: CalculationResult): TopSellingItem[] {
