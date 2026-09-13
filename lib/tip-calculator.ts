@@ -618,15 +618,19 @@ export function calculateFlexibleReports({
       });
   }
 
-  // Event sales are identified by the order number, which a payments export leaves empty.
-  // Reporting "$0.00 event tips" there would read as "there were no events" when the
-  // truth is that events cannot be seen at all from this file.
-  if (reports.tipSource === "payments" && !reports.hasOrders && metrics.eventOrders === 0) {
+  // Events are identified only by an Order Number of CLOVERGO. Recent Clover exports
+  // leave that column empty on every row — in both the orders and payments reports — so
+  // an event worked on the floor becomes invisible. Reporting "$0.00 event tips" would
+  // read as "there were no events" rather than "events cannot be seen in this file".
+  const hasEventShift = parsedTimesheet.shifts.some((shift) => shift.isEventRole);
+  const hasAnyOrderNumber = parsedSales.orders.some((order) => order.orderNumber.trim() !== "");
+
+  if (hasEventShift && metrics.eventOrders === 0 && !hasAnyOrderNumber) {
     issues.push({
       severity: "warning",
       source: "sales",
       message:
-        "A Payments export does not carry the CLOVERGO order number, so event sales cannot be separated. Upload the Orders export to split event tips."
+        "An Evento shift was worked, but no sales row carries an order number, so event sales could not be separated and their tips went into the store pool."
     });
   }
 
