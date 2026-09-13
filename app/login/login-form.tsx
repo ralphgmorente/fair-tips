@@ -17,9 +17,9 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         </span>
         <div>
           <p className="eyebrow">ShiftFlow</p>
-          <h1>Manager sign in</h1>
+          <h1>Sign in</h1>
           <p className="access-copy">
-            Sign in with your manager account to open the business dashboard.
+            Managers open the business dashboard. Staff see their own tips.
           </p>
         </div>
         <form className="password-form" action={formAction}>
