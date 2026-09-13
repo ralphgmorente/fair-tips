@@ -150,6 +150,12 @@ export type FlexibleReportInput = {
   ordersGrid?: Grid | null;
   paymentsGrid?: Grid | null;
   timesheetGrid?: Grid | null;
+  /**
+   * Till accounts that are not people — a former owner's login still baked into a
+   * terminal, a shared "front counter" account. Sales under these names are never
+   * reported as someone missing from the timesheet.
+   */
+  ignoredSalesNames?: string[];
 };
 
 const EVENT_ORDER_NUMBER = "CLOVERGO";
@@ -353,7 +359,8 @@ export function calculateTipDistribution(
 export function calculateFlexibleReports({
   ordersGrid,
   paymentsGrid,
-  timesheetGrid
+  timesheetGrid,
+  ignoredSalesNames = []
 }: FlexibleReportInput): CalculationResult {
   const parsedReports = parseUploadedBusinessReports(ordersGrid, paymentsGrid);
   const parsedTimesheet = timesheetGrid ? parseTimesheetReport(timesheetGrid) : emptyParsedTimesheet();
@@ -582,9 +589,12 @@ export function calculateFlexibleReports({
     });
   }
 
-  // Somebody ringing up sales but absent from the timesheet earns nothing, and their
-  // share is quietly divided among everyone else. The app cannot know whether that is
-  // correct, but it must not stay silent about it.
+  // A name on a sale that never appears on the timesheet is worth surfacing, but it is
+  // usually a till account rather than an unpaid person — a former owner's login left on
+  // the terminal, say. Word it as an attribution question, and let those accounts be
+  // listed in Settings so the notice does not cry wolf every pay period.
+  const ignoredNames = ignoredSalesNames.map(normalizeName).filter(Boolean);
+
   if (timesheetGrid && parsedTimesheet.shifts.length > 0) {
     const shiftNames = parsedTimesheet.shifts
       .filter((shift) => shift.valid)
@@ -593,7 +603,7 @@ export function calculateFlexibleReports({
     const unscheduled = new Map<string, number>();
     parsedSales.orders.forEach((order) => {
       const name = normalizeName(order.employeeName);
-      if (!name) {
+      if (!name || ignoredNames.includes(name)) {
         return;
       }
       // Exports spell people inconsistently — "Luan" on payments, "Luan Martins" on the
@@ -613,7 +623,7 @@ export function calculateFlexibleReports({
         issues.push({
           severity: "warning",
           source: "calculation",
-          message: `${name} rang up ${count} ${count === 1 ? "sale" : "sales"} but has no shift on the timesheet, so they receive no tips.`
+          message: `${count} ${count === 1 ? "sale is" : "sales are"} recorded under "${name}", who has no shift on the timesheet. If that is a person they earned no tips; if it is an old till account, add it to Settings to stop this notice.`
         });
       });
   }

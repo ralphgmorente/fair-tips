@@ -166,7 +166,8 @@ export function DashboardClient({ user }: { user: SessionUser }) {
       calculateFlexibleReports({
         ordersGrid: ordersUpload.rows,
         paymentsGrid: paymentsUpload.rows,
-        timesheetGrid: timesheetUpload.rows
+        timesheetGrid: timesheetUpload.rows,
+        ignoredSalesNames: readIgnoredSalesNames()
       })
     );
   }
@@ -451,6 +452,69 @@ function FeatureUnavailablePanel({
   );
 }
 
+/**
+ * Till accounts that are not people, so the app stops reporting them as someone missing
+ * from the timesheet. A bought-out owner's login left on a terminal is the usual case.
+ */
+function IgnoredSalesNamesSetting() {
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setValue(readIgnoredSalesNames().join(", "));
+  }, []);
+
+  function handleSave() {
+    try {
+      localStorage.setItem(IGNORED_SALES_NAMES_KEY, value);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2500);
+    } catch {
+      // A browser refusing storage is not worth an error here.
+    }
+  }
+
+  return (
+    <div>
+      <strong>Till accounts to ignore</strong>
+      <span>
+        Names that appear on sales but are not staff — an old owner&rsquo;s login still on
+        a terminal, for example. Separate with commas. Takes effect on the next
+        calculation.
+      </span>
+      <div className="ignored-names-row">
+        <input
+          type="text"
+          value={value}
+          placeholder="HENRY RODRIGUES"
+          onChange={(event) => setValue(event.target.value)}
+          aria-label="Till accounts to ignore"
+        />
+        <button className="secondary-button compact" type="button" onClick={handleSave}>
+          {saved ? "Saved" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const IGNORED_SALES_NAMES_KEY = "shiftFlowIgnoredSalesNames";
+
+/** Till accounts to ignore, stored per browser. Empty everywhere it cannot be read. */
+function readIgnoredSalesNames(): string[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    return (localStorage.getItem(IGNORED_SALES_NAMES_KEY) ?? "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function SettingsView() {
   return (
     <section className="panel-card settings-panel">
@@ -470,6 +534,7 @@ function SettingsView() {
             administrator; there is no self-signup.
           </span>
         </div>
+        <IgnoredSalesNamesSetting />
       </div>
     </section>
   );

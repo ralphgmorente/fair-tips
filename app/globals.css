@@ -2620,3 +2620,25 @@ tfoot td {
   font-size: 0.86rem;
   font-weight: 750;
 }
+
+.ignored-names-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.ignored-names-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.ignored-names-row input:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--ring);
+}
