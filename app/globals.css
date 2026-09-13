@@ -190,13 +190,22 @@ h2 {
 .title-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  /* No wrapping: the pill sat beside "Business Dashboard" but dropped below the longer
+     "Weekly Tip Distribution", so the same header looked different on each view. The
+     heading shrinks instead, and wrapping comes back on phones where it is needed. */
+  flex-wrap: nowrap;
   gap: 12px;
+}
+
+.title-row h1 {
+  min-width: 0;
 }
 
 .review-pill {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
   min-height: 26px;
   padding: 4px 10px;
   border-radius: 8px;
@@ -2208,6 +2217,10 @@ tfoot td {
 }
 
 @media (max-width: 760px) {
+  .title-row {
+    flex-wrap: wrap;
+  }
+
   h1 {
     font-size: 1.72rem;
   }
