@@ -38,6 +38,8 @@ import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
 import { loadWorkspaceSettings, saveWorkspaceSettings } from "@/app/actions/workspace-settings";
 import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
+import { inviteMember, loadTeam, revokeInvite } from "@/app/actions/team";
+import type { TeamState } from "@/lib/team";
 import {
   clearCalculation,
   loadCalculation,
@@ -951,6 +953,153 @@ function WorkspaceSettingsForm({
   );
 }
 
+/**
+ * Adding people to the store.
+ *
+ * An invite records the email, role and timesheet name; the person then creates their own
+ * password. Nobody here handles the service key, and a database trigger refuses any
+ * sign-up that was not invited, so the role cannot be self-assigned.
+ */
+function TeamSettings() {
+  const [team, setTeam] = useState<TeamState | null>(null);
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
+  const [role, setRole] = useState<"staff" | "manager" | "admin">("staff");
+  const [busy, setBusy] = useState(false);
+  const [feedback, setFeedback] = useState({ message: "", ok: true });
+
+  const refresh = useCallback(() => {
+    loadTeam()
+      .then(setTeam)
+      .catch(() => setTeam({ members: [], invites: [], canManage: false }));
+  }, []);
+
+  useEffect(refresh, [refresh]);
+
+  async function handleInvite() {
+    setBusy(true);
+    const result = await inviteMember({ email, fullName, role, employeeName });
+    setFeedback({ message: result.message, ok: result.ok });
+    setBusy(false);
+    if (result.ok) {
+      setEmail("");
+      setFullName("");
+      setEmployeeName("");
+      refresh();
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    const result = await revokeInvite(id);
+    setFeedback({ message: result.message, ok: result.ok });
+    refresh();
+  }
+
+  if (!team) {
+    return (
+      <div>
+        <strong>Team</strong>
+        <span>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!team.canManage) {
+    return null;
+  }
+
+  const pending = team.invites.filter((invite) => !invite.accepted_at);
+
+  return (
+    <div>
+      <strong>Team</strong>
+      <span>
+        Invite someone by email. They set their own password, and only invited addresses
+        can register. Staff need their name exactly as it appears on the timesheet, or
+        their payouts will not find them.
+      </span>
+
+      <ul className="team-list">
+        {team.members.map((member) => (
+          <li key={member.userId}>
+            <span className="team-who">
+              <strong>{member.fullName || member.email}</strong>
+              <small>{member.email}</small>
+            </span>
+            <span className="team-role">{member.role}</span>
+          </li>
+        ))}
+        {pending.map((invite) => (
+          <li key={invite.id}>
+            <span className="team-who">
+              <strong>{invite.full_name || invite.email}</strong>
+              <small>{invite.email} · invited, not signed up yet</small>
+            </span>
+            <span className="team-actions">
+              <span className="team-role">{invite.role}</span>
+              <button
+                className="secondary-button compact"
+                type="button"
+                onClick={() => handleRevoke(invite.id)}
+              >
+                Remove
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="team-form">
+        <input
+          type="email"
+          value={email}
+          placeholder="name@example.com"
+          onChange={(event) => setEmail(event.target.value)}
+          aria-label="Email"
+        />
+        <input
+          type="text"
+          value={fullName}
+          placeholder="Full name"
+          onChange={(event) => setFullName(event.target.value)}
+          aria-label="Full name"
+        />
+        <input
+          type="text"
+          value={employeeName}
+          placeholder="Name on the timesheet"
+          onChange={(event) => setEmployeeName(event.target.value)}
+          aria-label="Name on the timesheet"
+        />
+        <select
+          value={role}
+          onChange={(event) => setRole(event.target.value as typeof role)}
+          aria-label="Role"
+        >
+          <option value="staff">Staff</option>
+          <option value="manager">Manager</option>
+          <option value="admin">Admin</option>
+        </select>
+        <button
+          className="primary-button compact"
+          type="button"
+          onClick={handleInvite}
+          disabled={busy || !email}
+        >
+          {busy ? "Inviting…" : "Invite"}
+        </button>
+      </div>
+
+      {feedback.message ? (
+        <span className={feedback.ok ? "publish-ok" : "publish-error"}>
+          {feedback.message}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function SettingsView({
   settings,
   onSettingsChange
@@ -977,6 +1126,7 @@ function SettingsView({
           </span>
         </div>
         <WorkspaceSettingsForm settings={settings} onSettingsChange={onSettingsChange} />
+        <TeamSettings />
       </div>
     </section>
   );

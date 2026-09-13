@@ -9,7 +9,7 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
  * whether the database answered, and the query it makes is one any visitor could already
  * make with the publishable key, so exposing it adds nothing.
  */
-const PUBLIC_PATHS = ["/login", "/auth", "/api/keepalive"];
+const PUBLIC_PATHS = ["/login", "/join", "/auth", "/api/keepalive"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
