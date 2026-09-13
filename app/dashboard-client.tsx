@@ -38,6 +38,12 @@ import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
 import { loadWorkspaceSettings, saveWorkspaceSettings } from "@/app/actions/workspace-settings";
 import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
+import {
+  clearCalculation,
+  loadCalculation,
+  saveCalculation,
+  type SavedUpload
+} from "@/lib/saved-calculation";
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
@@ -112,6 +118,8 @@ export function DashboardClient({ user }: { user: SessionUser }) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [settings, setSettings] = useState<WorkspaceSettings>(emptySettings);
+  /** Upload details recovered from a previous session, when the files are no longer held. */
+  const [restoredUploads, setRestoredUploads] = useState<SavedUpload[]>([]);
   const [activeView, setActiveView] = useState<AppView>("dashboard");
   const [ordersUpload, setOrdersUpload] = useState<UploadState>(emptyUpload);
   const [paymentsUpload, setPaymentsUpload] = useState<UploadState>(emptyUpload);
@@ -144,6 +152,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
       rowCount: upload.rows?.length ?? 0,
       contentHash: upload.contentHash
     }));
+  const effectiveUploads = uploads.length ? uploads : restoredUploads;
   const pageTitle =
     activeView === "dashboard"
       ? result
@@ -154,6 +163,16 @@ export function DashboardClient({ user }: { user: SessionUser }) {
         : activeView === "history"
           ? "Saved periods"
           : "Settings";
+
+  // Bring back the last calculation so a refresh does not throw away the period and
+  // force both files to be picked again.
+  useEffect(() => {
+    const saved = loadCalculation();
+    if (saved) {
+      setResult(saved.result);
+      setRestoredUploads(saved.uploads);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -228,18 +247,22 @@ export function DashboardClient({ user }: { user: SessionUser }) {
       return;
     }
 
-    setResult(
-      calculateFlexibleReports({
-        ordersGrid: ordersUpload.rows,
-        paymentsGrid: paymentsUpload.rows,
-        timesheetGrid: timesheetUpload.rows,
-        ignoredSalesNames: settings.ignoredSalesNames,
-        eventDeviceName: settings.eventDeviceName
-      })
-    );
+    const next = calculateFlexibleReports({
+      ordersGrid: ordersUpload.rows,
+      paymentsGrid: paymentsUpload.rows,
+      timesheetGrid: timesheetUpload.rows,
+      ignoredSalesNames: settings.ignoredSalesNames,
+      eventDeviceName: settings.eventDeviceName
+    });
+
+    setResult(next);
+    setRestoredUploads(uploads);
+    saveCalculation(next, uploads);
   }
 
   function handleReset() {
+    clearCalculation();
+    setRestoredUploads([]);
     setOrdersUpload(emptyUpload);
     setPaymentsUpload(emptyUpload);
     setTimesheetUpload(emptyUpload);
@@ -316,7 +339,7 @@ export function DashboardClient({ user }: { user: SessionUser }) {
             {activeView === "dashboard" ? (
               <DashboardView result={result} eventDeviceName={settings.eventDeviceName} />
             ) : (
-              <TipsView result={result} uploads={uploads} />
+              <TipsView result={result} uploads={effectiveUploads} />
             )}
           </>
         )}
