@@ -1163,7 +1163,9 @@ h2 {
 .day-column {
   position: relative;
   display: grid;
-  grid-template-rows: 150px auto auto;
+  /* Two rows for every column: the badge is lifted out of the flow below, so the day
+     labels all sit on one line instead of "Best" pushing Friday's down. */
+  grid-template-rows: 150px auto;
   gap: 6px;
   min-width: 0;
   text-align: center;
@@ -1204,7 +1206,10 @@ h2 {
 }
 
 .day-column > em {
-  justify-self: center;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
   border-radius: 8px;
   padding: 3px 6px;
   background: var(--accent-soft);
@@ -1213,6 +1218,7 @@ h2 {
   font-style: normal;
   font-weight: 900;
   line-height: 1;
+  pointer-events: none;
 }
 
 .day-tooltip {
@@ -2281,7 +2287,7 @@ tfoot td {
   }
 
   .day-column {
-    grid-template-rows: 128px auto auto;
+    grid-template-rows: 128px auto;
   }
 
   .day-column-track {
@@ -2439,7 +2445,7 @@ tfoot td {
   }
 
   .day-column {
-    grid-template-rows: 112px auto auto;
+    grid-template-rows: 112px auto;
     gap: 5px;
   }
 
@@ -2838,4 +2844,110 @@ tfoot td {
   margin-top: 6px;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+/* A breakdown row owns its width instead of borrowing the four-column sales-mix grid,
+   which collapsed here: the label and count stacked and the bar disappeared entirely. */
+.breakdown-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdown-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.breakdown-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.breakdown-label {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdown-value {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.breakdown-track {
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.breakdown-track i {
+  display: block;
+  width: var(--bar-width, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.breakdown-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hover detail for the hourly chart. The daily bars already had one; the line chart
+   relied on a native SVG <title>, which is slow to appear and cannot be styled. */
+.sales-line-chart {
+  position: relative;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 4px;
+  left: var(--tooltip-left, 50%);
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  padding: 9px 11px;
+  border: 1px solid rgba(2, 56, 47, 0.18);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-strong);
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.chart-tooltip strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.chart-tooltip span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.line-point-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.line-point.hovered circle:not(.line-point-halo) {
+  r: 6;
+  stroke: #ffffff;
+  stroke-width: 2;
 }

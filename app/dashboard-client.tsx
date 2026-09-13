@@ -1288,7 +1288,7 @@ function BusinessSnapshot({
       unavailable: !result.capabilities.hasSalesData
     },
     {
-      label: "Average Ticket",
+      label: "Average Order",
       value: averageTicket.available ? formatCurrency(averageTicket.value) : "Data unavailable",
       detail: averageTicket.available
         ? `${formatTransactionCount(averageTicket.transactions)} used`
@@ -1333,6 +1333,9 @@ function BusinessSnapshot({
 }
 
 function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
+  // A native SVG <title> takes a second to appear and cannot be styled, so the chart
+  // carries its own tooltip with the same detail as the daily bars.
+  const [hoverHour, setHoverHour] = useState<number | null>(null);
   const totalHourlySales = hourlySales.reduce((total, hour) => total + hour.netSales, 0);
   const peakHour = getPeakHour(hourlySales);
   const lineChart = buildHourlyLineChart(hourlySales);
@@ -1360,6 +1363,26 @@ function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
         />
       ) : (
         <div className="sales-line-chart">
+          {(() => {
+            const active = lineChart.points.find((point) => point.hour === hoverHour);
+            if (!active) {
+              return null;
+            }
+            return (
+              <span
+                className="chart-tooltip"
+                style={
+                  {
+                    "--tooltip-left": `${(active.x / LINE_CHART_WIDTH) * 100}%`
+                  } as CSSProperties
+                }
+              >
+                <strong>{active.label}</strong>
+                <span>{formatCurrency(active.netSales)} net sales</span>
+                <span>{formatTransactionCount(active.transactions)}</span>
+              </span>
+            );
+          })()}
           <svg
             aria-label="Hourly net sales line chart"
             role="img"
@@ -1399,11 +1422,31 @@ function SalesByHourCard({ hourlySales }: { hourlySales: HourlySales[] }) {
               return (
                 <g
                   aria-label={`${point.label}, ${formatCurrency(point.netSales)} net sales, ${formatNumber(point.transactions, 0)} transactions`}
-                  className={point.isPeak ? "line-point peak" : "line-point"}
+                  className={
+                    [
+                      "line-point",
+                      point.isPeak ? "peak" : "",
+                      hoverHour === point.hour ? "hovered" : ""
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  }
                   key={point.hour}
                   tabIndex={0}
+                  onMouseEnter={() => setHoverHour(point.hour)}
+                  onMouseLeave={() => setHoverHour(null)}
+                  onFocus={() => setHoverHour(point.hour)}
+                  onBlur={() => setHoverHour(null)}
                 >
                   <title>{tooltip}</title>
+                  {/* A full-height target, so the pointer does not have to find a 4px dot. */}
+                  <rect
+                    className="line-point-hit"
+                    x={point.x - 14}
+                    y={LINE_CHART_TOP - 10}
+                    width={28}
+                    height={LINE_CHART_BOTTOM - LINE_CHART_TOP + 20}
+                  />
                   {point.isPeak ? <circle className="line-point-halo" cx={point.x} cy={point.y} r="10" /> : null}
                   <circle cx={point.x} cy={point.y} r={point.isPeak ? "5" : "4"} />
                   {point.isPeak ? (
@@ -1600,7 +1643,7 @@ function BusinessHealthCard({
 
         <div className={`health-row ${ticketHealth.tone}`}>
           <div className="health-copy">
-            <strong>Average Ticket</strong>
+            <strong>Average Order</strong>
             <span>{averageTicket.available ? formatCurrency(averageTicket.value) : "Data unavailable"}</span>
             <small>{ticketHealth.label}</small>
           </div>
@@ -1709,16 +1752,19 @@ function OrderTypeCard({
           </span>
         </div>
       ) : (
-        <ul className="mix-list">
+        <ul className="breakdown-list">
           {slices.map((slice) => (
-            <li className="mix-row" key={slice.label}>
-              <span className="mix-label">{slice.label}</span>
-              <span className="mix-bar">
+            <li className="breakdown-row" key={slice.label}>
+              <span className="breakdown-top">
+                <span className="breakdown-label">{slice.label}</span>
+                <span className="breakdown-value">{formatCurrency(slice.sales)}</span>
+              </span>
+              <span className="breakdown-track">
                 <i style={{ "--bar-width": `${slice.share * 100}%` } as CSSProperties} />
               </span>
-              <span className="mix-value">{formatCurrency(slice.sales)}</span>
-              <span className="mix-share">
-                {slice.orders} {slice.orders === 1 ? "order" : "orders"}
+              <span className="breakdown-meta">
+                {slice.orders} {slice.orders === 1 ? "order" : "orders"} ·{" "}
+                {formatPercent(slice.share)}
               </span>
             </li>
           ))}
@@ -2835,7 +2881,7 @@ function buildBusinessInsights({
 
   if (averageTicket.available) {
     insights.push({
-      title: `Average Ticket was ${formatCurrency(averageTicket.value)}.`,
+      title: `The average order was ${formatCurrency(averageTicket.value)}.`,
       detail: `${formatTransactionCount(averageTicket.transactions)} were used in the calculation.`
     });
   }
@@ -2955,7 +3001,7 @@ function getAverageTicketHealth(
   }
 
   if (target === null) {
-    return { label: "Set an Average Ticket target", meterPercent: 0, markerPercent: null, tone: "neutral" };
+    return { label: "Set an Average Order target", meterPercent: 0, markerPercent: null, tone: "neutral" };
   }
 
   const scaleMax = target * 1.5;
