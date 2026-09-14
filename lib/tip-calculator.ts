@@ -724,6 +724,22 @@ export function calculateFlexibleReports({
   };
 }
 
+/**
+ * What a file actually is, regardless of which box it was dropped into.
+ *
+ * Used at upload time so a timesheet dropped into the Payments box is refused there and
+ * then, rather than being read as a sales report and quietly producing a dashboard built
+ * from nothing.
+ */
+export function detectUploadKind(
+  grid: Grid
+): "orders" | "payments" | "timesheet" | null {
+  if (findHeader(grid, TIMESHEET_REQUIRED)) {
+    return "timesheet";
+  }
+  return detectBusinessReportKind(grid);
+}
+
 export function detectBusinessReportKind(grid: Grid): BusinessReportKind | null {
   const ordersHeader = findHeader(grid, SALES_REQUIRED);
   const paymentsHeader = findHeader(grid, PAYMENTS_REQUIRED);

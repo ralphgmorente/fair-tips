@@ -21,7 +21,9 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "ShiftFlow",
-    statusBarStyle: "default",
+    // The page runs under the status bar so the app's own colour shows there instead of
+    // an iOS-white strip. globals.css paints that area and pads the content past it.
+    statusBarStyle: "black-translucent",
     // Generated alongside the images themselves; iOS shows a blank white screen for
     // any device size that is not listed here.
     startupImage: splashDevices

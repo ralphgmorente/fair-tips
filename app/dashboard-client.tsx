@@ -17,6 +17,7 @@ import {
   Lightbulb,
   LockKeyhole,
   PackageSearch,
+  Pencil,
   ReceiptText,
   RotateCcw,
   Search,
@@ -41,6 +42,12 @@ import {
   type PublishState
 } from "@/app/actions/publish-payouts";
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
+import {
+  deletePeriod,
+  renamePeriod,
+  setPeriodShared,
+  type PeriodActionState
+} from "@/app/actions/manage-periods";
 import { loadWorkspaceSettings, saveWorkspaceSettings } from "@/app/actions/workspace-settings";
 import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
 import { inviteMember, loadTeam, revokeInvite } from "@/app/actions/team";
@@ -54,6 +61,7 @@ import {
 import { readSpreadsheetFile } from "@/lib/spreadsheet-file";
 import {
   calculateFlexibleReports,
+  detectUploadKind,
   formatCurrency,
   formatDateTime,
   formatNumber,
@@ -115,6 +123,13 @@ type UploadSummary = {
   contentHash: string;
 };
 
+/** What each detected file is called in the interface. */
+const UPLOAD_KIND_LABELS: Record<"orders" | "payments" | "timesheet", string> = {
+  orders: "Orders report",
+  payments: "Payments report",
+  timesheet: "Timesheet"
+};
+
 export type SessionUser = {
   email: string;
   fullName: string;
@@ -145,7 +160,18 @@ export function DashboardClient({
     ordersUpload.status === "reading" ||
     paymentsUpload.status === "reading" ||
     timesheetUpload.status === "reading";
-  const canCalculate = hasBusinessReport && !uploadsReading;
+  const hasTimesheetReport = timesheetUpload.status === "ready";
+  const canCalculate = hasBusinessReport && hasTimesheetReport && !uploadsReading;
+  /** What is still missing, named so the manager knows which box to fill. */
+  const missingUpload = uploadsReading
+    ? "Reading the files\u2026"
+    : !hasBusinessReport && !hasTimesheetReport
+      ? "Orders or Payments report required, and the Timesheet"
+      : !hasBusinessReport
+        ? "Orders or Payments report required"
+        : !hasTimesheetReport
+          ? "Timesheet required"
+          : "";
   const hasErrors = result?.issues.some((issue) => issue.severity === "error") ?? false;
   const blockingUploadError = Boolean(
     ordersUpload.error || paymentsUpload.error || timesheetUpload.error
@@ -208,6 +234,41 @@ export function DashboardClient({
     }
   }, []);
 
+  /**
+   * Opens the view holding something and puts it on screen.
+   *
+   * Switching tab alone was not enough: when the thing was already on the current tab
+   * the click did nothing visible, which is exactly how a dead button looks.
+   */
+  const jumpTo = useCallback(
+    (view: AppView, targetId: string) => {
+      showView(view);
+
+      let attempts = 0;
+      const reveal = () => {
+        const target = document.getElementById(targetId);
+        if (!target) {
+          // The view it lives in may not have rendered yet.
+          if (attempts < 12) {
+            attempts += 1;
+            requestAnimationFrame(reveal);
+          }
+          return;
+        }
+
+        if (target instanceof HTMLDetailsElement) {
+          target.open = true;
+        }
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.classList.add("jump-flash");
+        window.setTimeout(() => target.classList.remove("jump-flash"), 1400);
+      };
+
+      requestAnimationFrame(reveal);
+    },
+    [showView]
+  );
+
   // Back and forward should move between tabs, not out of the app.
   useEffect(() => {
     const onPopState = () => {
@@ -258,13 +319,42 @@ export function DashboardClient({
 
     try {
       const [rows, contentHash] = await Promise.all([readSpreadsheetFile(file), hashFile(file)]);
-      setUpload({
-        fileName: file.name,
-        rows,
-        error: rows.length === 0 ? "No rows found in the first sheet." : "",
-        status: rows.length === 0 ? "error" : "ready",
-        contentHash
-      });
+
+      if (rows.length === 0) {
+        setUpload({
+          fileName: file.name,
+          rows: null,
+          error: "This file has no rows in its first sheet.",
+          status: "error",
+          contentHash
+        });
+        return;
+      }
+
+      // A file only belongs in the box that matches what it is. Accepting a timesheet
+      // as a payments report gave a dashboard built from a file with no sales in it.
+      const detected = detectUploadKind(rows);
+      const slotMismatch =
+        detected === null ||
+        (kind === "timesheet") !== (detected === "timesheet");
+
+      if (slotMismatch) {
+        setUpload({
+          fileName: file.name,
+          rows: null,
+          error:
+            detected === null
+              ? "This is not a Clover export. Upload the file exactly as Clover produced it."
+              : `This is the ${UPLOAD_KIND_LABELS[detected]}, not ${
+                  kind === "timesheet" ? "a timesheet" : "a sales report"
+                }. Put it in the ${UPLOAD_KIND_LABELS[detected]} box instead.`,
+          status: "error",
+          contentHash
+        });
+        return;
+      }
+
+      setUpload({ fileName: file.name, rows, error: "", status: "ready", contentHash });
     } catch {
       setUpload({
         fileName: file.name,
@@ -277,7 +367,9 @@ export function DashboardClient({
   }
 
   function handleCalculate() {
-    if (!ordersUpload.rows && !paymentsUpload.rows) {
+    // Both halves are required: sales say what was tipped, the timesheet says who was
+    // there to earn it.
+    if ((!ordersUpload.rows && !paymentsUpload.rows) || !timesheetUpload.rows) {
       return;
     }
 
@@ -334,7 +426,12 @@ export function DashboardClient({
 
   return (
     <div className="app-frame">
-      <AppSidebar activeView={activeView} result={result} onViewChange={showView} />
+      <AppSidebar
+        activeView={activeView}
+        result={result}
+        onViewChange={showView}
+        onJump={jumpTo}
+      />
       <main className="dashboard-main">
         <DashboardHeader
           title={pageTitle}
@@ -375,6 +472,7 @@ export function DashboardClient({
               timesheetUpload={timesheetUpload}
               hasBusinessReport={hasBusinessReport}
               canCalculate={canCalculate}
+              missingUpload={missingUpload}
               blockingUploadError={blockingUploadError}
               result={result}
               onOrdersUpload={(file) => handleUpload("orders", file)}
@@ -407,11 +505,13 @@ export function DashboardClient({
 function AppSidebar({
   activeView,
   result,
-  onViewChange
+  onViewChange,
+  onJump
 }: {
   activeView: AppView;
   result: CalculationResult | null;
   onViewChange: (view: AppView) => void;
+  onJump: (view: AppView, targetId: string) => void;
 }) {
   const navItems: Array<{ id: AppView; label: string; icon: LucideIcon }> = [
     { id: "dashboard", label: "Dashboard", icon: ChartPie },
@@ -448,7 +548,9 @@ function AppSidebar({
         })}
       </nav>
 
-      {result ? <PayoutChecklist result={result} onViewChange={onViewChange} /> : null}
+      {result ? (
+        <PayoutChecklist result={result} activeView={activeView} onJump={onJump} />
+      ) : null}
     </aside>
   );
 }
@@ -462,15 +564,20 @@ function AppSidebar({
  */
 function PayoutChecklist({
   result,
-  onViewChange
+  activeView,
+  onJump
 }: {
   result: CalculationResult;
-  onViewChange: (view: AppView) => void;
+  activeView: AppView;
+  onJump: (view: AppView, targetId: string) => void;
 }) {
   const errors = result.issues.filter((issue) => issue.severity === "error").length;
   const warnings = result.issues.filter((issue) => issue.severity === "warning").length;
   const unallocated = result.metrics.totalUnallocatedTips;
   const ready = errors === 0 && unallocated === 0;
+  // The validation panel is on both of these, so reviewing warnings should not drag the
+  // manager off the tab they are working on.
+  const warningsView: AppView = activeView === "tips" ? "tips" : "dashboard";
 
   return (
     <div className="sidebar-support">
@@ -478,7 +585,7 @@ function PayoutChecklist({
 
       <ul className="checklist">
         <li className={warnings ? "checklist-item warn" : "checklist-item done"}>
-          <button type="button" onClick={() => onViewChange("dashboard")}>
+          <button type="button" onClick={() => onJump(warningsView, "warnings")}>
             {warnings ? (
               <AlertTriangle aria-hidden="true" size={15} />
             ) : (
@@ -493,7 +600,7 @@ function PayoutChecklist({
         </li>
 
         <li className={unallocated > 0 ? "checklist-item warn" : "checklist-item done"}>
-          <button type="button" onClick={() => onViewChange("tips")}>
+          <button type="button" onClick={() => onJump("tips", "unallocated")}>
             {unallocated > 0 ? (
               <AlertTriangle aria-hidden="true" size={15} />
             ) : (
@@ -508,7 +615,7 @@ function PayoutChecklist({
         </li>
 
         <li className="checklist-item done">
-          <button type="button" onClick={() => onViewChange("tips")}>
+          <button type="button" onClick={() => onJump("tips", "payouts")}>
             <Users aria-hidden="true" size={15} />
             <span>
               {formatCurrency(result.metrics.totalAllocatedTips)} to{" "}
@@ -568,6 +675,11 @@ function DashboardHeader({
         <span className="session-identity" title={user.email}>
           <UserRound aria-hidden="true" size={16} />
           <span>{user.fullName || user.email}</span>
+          {/* Which account you are signed in as decides what you are allowed to do, so
+              it should not take a trip to Settings to find out. */}
+          {user.role === "admin" || user.role === "manager" ? (
+            <span className="role-pill">{user.role === "admin" ? "Admin" : "Manager"}</span>
+          ) : null}
         </span>
         {showReportSetup ? null : (
           <button className="secondary-button compact" type="button" onClick={onNewReport}>
@@ -765,8 +877,49 @@ function HistoryView({
 }) {
   const [periods, setPeriods] = useState<HistoryPeriod[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
 
   const [loadFailed, setLoadFailed] = useState(false);
+
+  /**
+   * Applies a change to the saved copy and to what is on screen.
+   *
+   * The list is patched rather than refetched: History is the only place these figures
+   * live, so a failed refetch after a successful write would look like the change was
+   * lost.
+   */
+  async function runPeriodAction(
+    periodId: string,
+    action: () => Promise<PeriodActionState>,
+    patch: (period: HistoryPeriod) => HistoryPeriod | null
+  ): Promise<boolean> {
+    setBusyId(periodId);
+    setActionError("");
+
+    const state = await action();
+
+    if (!state.ok) {
+      setActionError(state.message);
+      setBusyId(null);
+      return false;
+    }
+
+    setPeriods((current) =>
+      (current ?? []).flatMap((period) => {
+        if (period.id !== periodId) {
+          return [period];
+        }
+        const next = patch(period);
+        return next ? [next] : [];
+      })
+    );
+    setBusyId(null);
+    return true;
+  }
 
   useEffect(() => {
     let active = true;
@@ -829,6 +982,9 @@ function HistoryView({
     <div className="view-stack">
       {periods.map((period) => {
         const isOpen = openId === period.id;
+        const isEditing = editingId === period.id;
+        const isBusy = busyId === period.id;
+        const isShared = period.status === "published";
         const sortedPayouts = [...period.payouts].sort(
           (a, b) => Number(b.total_tips) - Number(a.total_tips)
         );
@@ -868,6 +1024,91 @@ function HistoryView({
 
             {isOpen ? (
               <div className="history-body">
+                <div className="history-tools">
+                  {isEditing ? (
+                    <form
+                      className="history-rename"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const label = draftLabel;
+                        runPeriodAction(
+                          period.id,
+                          () => renamePeriod(period.id, label),
+                          (current) => ({ ...current, label: label.trim() })
+                        ).then((saved) => {
+                          if (saved) {
+                            setEditingId(null);
+                          }
+                        });
+                      }}
+                    >
+                      <label>
+                        <span>Period name</span>
+                        <input
+                          value={draftLabel}
+                          autoFocus
+                          maxLength={120}
+                          onChange={(event) => setDraftLabel(event.target.value)}
+                        />
+                      </label>
+                      <button className="primary-button compact" type="submit" disabled={isBusy}>
+                        {isBusy ? "Saving\u2026" : "Save name"}
+                      </button>
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        onClick={() => {
+                          setDraftLabel(period.label);
+                          setEditingId(period.id);
+                        }}
+                      >
+                        <Pencil aria-hidden="true" size={16} />
+                        Rename
+                      </button>
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() =>
+                          runPeriodAction(
+                            period.id,
+                            () => setPeriodShared(period.id, !isShared),
+                            (current) => ({
+                              ...current,
+                              status: isShared ? "draft" : "published"
+                            })
+                          )
+                        }
+                      >
+                        <Users aria-hidden="true" size={16} />
+                        {isShared ? "Hide from staff" : "Share with staff"}
+                      </button>
+                      <button
+                        className="danger-button compact"
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => setConfirmDeleteId(period.id)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {actionError && busyId === null && confirmDeleteId === null ? (
+                  <p className="form-error">{actionError}</p>
+                ) : null}
+
                 <div className="table-scroll">
                   <table className="summary-table">
                     <thead>
@@ -910,6 +1151,53 @@ function HistoryView({
           </section>
         );
       })}
+
+      {/* Deleting takes the period away from staff as well as from this list, and
+          nothing else holds these figures, so it always asks first. */}
+      {confirmDeleteId ? (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Delete period">
+          <div className="confirm-card">
+            <strong>Delete this period?</strong>
+            <span>
+              {periods.find((period) => period.id === confirmDeleteId)?.label} and every
+              payout in it will be removed for good. Staff will no longer see it. This
+              cannot be undone.
+            </span>
+            {actionError ? <p className="form-error">{actionError}</p> : null}
+            <div className="confirm-actions">
+              <button
+                className="secondary-button compact"
+                type="button"
+                onClick={() => {
+                  setConfirmDeleteId(null);
+                  setActionError("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-button compact"
+                type="button"
+                disabled={busyId === confirmDeleteId}
+                onClick={() => {
+                  const id = confirmDeleteId;
+                  runPeriodAction(
+                    id,
+                    () => deletePeriod(id),
+                    () => null
+                  ).then((removed) => {
+                    if (removed) {
+                      setConfirmDeleteId(null);
+                    }
+                  });
+                }}
+              >
+                {busyId === confirmDeleteId ? "Deleting\u2026" : "Delete for good"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2174,6 +2462,7 @@ function ReportSetupPanel({
   timesheetUpload,
   hasBusinessReport,
   canCalculate,
+  missingUpload,
   blockingUploadError,
   result,
   onOrdersUpload,
@@ -2187,6 +2476,7 @@ function ReportSetupPanel({
   timesheetUpload: UploadState;
   hasBusinessReport: boolean;
   canCalculate: boolean;
+  missingUpload: string;
   blockingUploadError: boolean;
   result: CalculationResult | null;
   onOrdersUpload: (file: File | null) => void;
@@ -2202,11 +2492,9 @@ function ReportSetupPanel({
     ? errors
       ? `${errors} blocking issue${errors === 1 ? "" : "s"} found`
       : `${warnings} warning${warnings === 1 ? "" : "s"} found`
-    : hasBusinessReport
-      ? hasTimesheet
-        ? "Both files read. Calculate when you are ready."
-        : "Add the timesheet to work out tips, or calculate sales only."
-      : "Pick an Orders or Payments export, plus the timesheet.";
+    : hasBusinessReport && hasTimesheet
+      ? "Both files read. Calculate when you are ready."
+      : "Upload an Orders or Payments export and the matching timesheet.";
 
   return (
     <section className="panel-card setup-panel" aria-label="Report setup">
@@ -2219,9 +2507,9 @@ function ReportSetupPanel({
             something is wrong, or everything is ready to run. */}
         {errors ? (
           <span className="setup-state error">Action needed</span>
-        ) : hasBusinessReport ? (
+        ) : missingUpload ? null : (
           <span className="setup-state ready">Ready</span>
-        ) : null}
+        )}
       </div>
       <div className="upload-row">
         <UploadPanel title="Orders" upload={ordersUpload} onUpload={onOrdersUpload} />
@@ -2234,17 +2522,17 @@ function ReportSetupPanel({
       </div>
       <div className="setup-footer">
         <div className={result && errors ? "setup-validation error" : "setup-validation"}>
-          {result && errors ? (
-            <AlertTriangle aria-hidden="true" size={18} />
-          ) : blockingUploadError ? (
+          {(result && errors) || blockingUploadError || missingUpload ? (
             <AlertTriangle aria-hidden="true" size={18} />
           ) : null}
           <span>
             {blockingUploadError
               ? "Fix the upload issue before calculating."
-              : result
-                ? `${errors} ${errors === 1 ? "error" : "errors"}, ${warnings} ${warnings === 1 ? "warning" : "warnings"}`
-                : ""}
+              : missingUpload
+                ? missingUpload
+                : result
+                  ? `${errors} ${errors === 1 ? "error" : "errors"}, ${warnings} ${warnings === 1 ? "warning" : "warnings"}`
+                  : ""}
           </span>
         </div>
         <div className="setup-actions">
@@ -2615,7 +2903,7 @@ function EmployeeTable({
   const isFiltered = visibleEmployees.length !== result.employees.length;
 
   return (
-    <section className="table-panel">
+    <section className="table-panel" id="payouts">
       <div className="section-heading">
         <div className="employee-heading">
           <h2>Employee summary</h2>
@@ -2790,7 +3078,7 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
           )}
 
           {warnings.length ? (
-            <details className="warning-details">
+            <details className="warning-details" id="warnings">
               <summary>
                 <AlertTriangle aria-hidden="true" size={17} />
                 <span>
@@ -2838,7 +3126,7 @@ function UnallocatedOrders({ result }: { result: CalculationResult }) {
   }
 
   return (
-    <section className="table-panel">
+    <section className="table-panel" id="unallocated">
       <div className="section-heading">
         <h2>Unallocated orders</h2>
         <span>{formatCurrency(result.metrics.totalUnallocatedTips)}</span>

@@ -37,6 +37,9 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--ink);
+  /* Installed on iOS the page extends under the status bar, so nothing may sit in the
+     inset by accident. */
+  padding-top: env(safe-area-inset-top);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
@@ -65,6 +68,20 @@ h1 {
 h2 {
   font-size: 1rem;
   line-height: 1.2;
+}
+
+/*
+ * The strip behind the iOS status bar, in the app's own dark green so the white status
+ * text reads and an installed copy has no white band above it.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(safe-area-inset-top);
+  background: #074d40;
+  z-index: 60;
+  pointer-events: none;
 }
 
 .app-frame {
@@ -175,6 +192,9 @@ h2 {
 .dashboard-main {
   min-width: 0;
   padding: 30px 30px 56px;
+  padding-left: max(30px, env(safe-area-inset-left));
+  padding-right: max(30px, env(safe-area-inset-right));
+  padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
 
 .dashboard-header {
@@ -805,7 +825,8 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mix-fill {
+  .mix-fill,
+  .jump-flash {
     animation: none;
   }
 }
@@ -1873,6 +1894,114 @@ h2 {
   padding: 0 12px 12px;
 }
 
+/* Brief ring on whatever the payout checklist just jumped to, so the click reads as
+   having done something even when the target was already on screen. */
+.jump-flash {
+  animation: jump-flash 1.4s ease-out;
+}
+
+@keyframes jump-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+
+/* Destructive actions look different from the ordinary ones, so "Delete" is never
+   pressed by muscle memory. */
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 15px;
+  border: 1px solid rgba(179, 52, 43, 0.32);
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.danger-button.compact {
+  min-width: 126px;
+}
+
+.danger-button:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.danger-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.history-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.history-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.history-rename label {
+  display: grid;
+  flex: 1 1 220px;
+  gap: 5px;
+  min-width: 0;
+}
+
+.history-rename span {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.history-rename input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.history-rename input:focus {
+  border-color: var(--accent);
+  outline: 3px solid var(--ring);
+}
+
+.role-pill {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
 .state-pill {
   display: inline-flex;
   align-items: center;
@@ -2226,6 +2355,9 @@ tfoot td {
 
   .dashboard-main {
     padding: 22px 18px 44px;
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+    padding-bottom: calc(44px + env(safe-area-inset-bottom));
   }
 
   .dashboard-header,
@@ -2546,17 +2678,23 @@ tfoot td {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  max-width: 210px;
+  max-width: 260px;
   padding: 0 10px;
   color: var(--ink-soft);
   font-size: 0.86rem;
   font-weight: 750;
 }
 
-.session-identity span {
+/* Only the name truncates. The role badge is two words at most and is the part that
+   says what this account may do, so it never gets cut down to "AD...". */
+.session-identity > span:not(.role-pill) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-identity .role-pill {
+  flex: none;
 }
 
 @media (max-width: 720px) {
