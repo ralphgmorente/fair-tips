@@ -18,6 +18,8 @@ export type HistoryPayout = {
 export type HistoryPeriod = {
   id: string;
   label: string;
+  /** "draft" is saved but not visible to staff; "published" is on their sign-in. */
+  status: "draft" | "published";
   published_at: string;
   total_tips: number;
   allocated_tips: number;
@@ -40,7 +42,7 @@ export async function loadHistory(): Promise<HistoryPeriod[]> {
   const { data, error } = await supabase
     .from("pay_periods")
     .select(
-      "id, label, published_at, total_tips, allocated_tips, unallocated_tips, metrics, " +
+      "id, label, status, published_at, total_tips, allocated_tips, unallocated_tips, metrics, " +
         "report_uploads(kind, file_name, row_count), " +
         "payouts(employee_name, paid_hours, total_tips, share_percent)"
     )

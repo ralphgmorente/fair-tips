@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { employeeKey } from "@/lib/employee-key";
 import type { TeamMember, TeamInvite, TeamState } from "@/lib/team";
+import { currentStoreId } from "@/lib/current-store";
 
 /**
  * Team management for a store.
@@ -12,13 +13,6 @@ import type { TeamMember, TeamInvite, TeamState } from "@/lib/team";
  * keeps account creation out of the service key's hands, which this deployment does not
  * hold and must never commit.
  */
-async function currentStoreId(
-  supabase: Awaited<ReturnType<typeof createClient>>
-): Promise<string | null> {
-  const { data } = await supabase.from("stores").select("id").limit(1).maybeSingle();
-  return data?.id ?? null;
-}
-
 export async function loadTeam(): Promise<TeamState> {
   const supabase = await createClient();
   const storeId = await currentStoreId(supabase);

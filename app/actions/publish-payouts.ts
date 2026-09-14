@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { employeeKey } from "@/lib/employee-key";
+import { currentStoreId } from "@/lib/current-store";
 
 export type PublishablePayout = {
   employee: string;
@@ -32,6 +33,12 @@ export type PublishInput = {
   metrics: Record<string, unknown>;
   /** Set once the manager has confirmed they mean to replace an existing period. */
   replaceExisting?: boolean;
+  /**
+   * "draft" keeps the period in History for managers only; "published" also puts each
+   * person's total on their own sign-in. Calculating saves a draft on its own, so a
+   * report is never lost just because nobody pressed publish.
+   */
+  status?: "draft" | "published";
 };
 
 export type PublishState = {
@@ -48,12 +55,14 @@ export type PublishState = {
  */
 async function findExistingPeriod(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  storeId: string,
   periodKey: string,
   uploads: PublishableUpload[]
 ) {
   const { data: byKey } = await supabase
     .from("pay_periods")
-    .select("id, label")
+    .select("id, label, status")
+    .eq("store_id", storeId)
     .eq("period_key", periodKey)
     .maybeSingle();
 
@@ -68,17 +77,20 @@ async function findExistingPeriod(
 
   const { data: byHash } = await supabase
     .from("report_uploads")
-    .select("pay_period_id, pay_periods(id, label)")
+    .select("pay_period_id, pay_periods(id, label, status)")
     .in("content_hash", hashes)
     .limit(1)
     .maybeSingle();
 
-  const period = (byHash as { pay_periods?: { id: string; label: string } } | null)?.pay_periods;
+  const period = (byHash as {
+    pay_periods?: { id: string; label: string; status: string };
+  } | null)?.pay_periods;
   return period ? { period, reason: "same files" as const } : null;
 }
 
 export async function publishPayouts(input: PublishInput): Promise<PublishState> {
   const supabase = await createClient();
+  const status = input.status ?? "published";
 
   const { data: claimsData } = await supabase.auth.getClaims();
   const claims = claimsData?.claims;
@@ -107,10 +119,22 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
   const periodKey =
     input.startsOn && input.endsOn ? `${input.startsOn}_${input.endsOn}` : input.label;
 
-  const match = await findExistingPeriod(supabase, periodKey, input.uploads);
+  const storeId = await currentStoreId(supabase);
+  if (!storeId) {
+    return { status: "error", message: "This account is not attached to a store yet." };
+  }
+
+  const match = await findExistingPeriod(supabase, storeId, periodKey, input.uploads);
 
   // Replacing a saved period changes what staff already see, so it is never silent.
-  if (match && !input.replaceExisting) {
+  // A draft has been shown to nobody — neither saving over one nor publishing one for
+  // the first time needs a warning, and asking there made the normal path feel wrong.
+  if (
+    match &&
+    match.period.status === "published" &&
+    !input.replaceExisting &&
+    status === "published"
+  ) {
     return {
       status: "confirm",
       message:
@@ -126,11 +150,12 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
     .from("pay_periods")
     .upsert(
       {
+        store_id: storeId,
         period_key: periodKey,
         label: input.label,
         starts_on: input.startsOn,
         ends_on: input.endsOn,
-        status: "published",
+        status,
         total_tips: input.totalTips,
         allocated_tips: input.allocatedTips,
         unallocated_tips: input.unallocatedTips,
@@ -138,7 +163,9 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
         published_by: claims.sub,
         published_at: new Date().toISOString()
       },
-      { onConflict: "period_key" }
+      // Matches pay_periods_store_period_key_idx. Keying on period_key alone stopped
+      // matching any constraint once periods became per-store, and every publish failed.
+      { onConflict: "store_id,period_key" }
     )
     .select("id")
     .single();
@@ -204,6 +231,10 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
     }
   }
 
+  if (status === "draft") {
+    return { status: "ok", message: "Saved to History." };
+  }
+
   const count = `${rows.length} ${rows.length === 1 ? "payout" : "payouts"}`;
   return {
     status: "ok",
@@ -211,4 +242,14 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
       ? `Updated this period for staff — ${count}, replacing what was published before.`
       : `Published ${count} to staff.`
   };
+}
+
+/**
+ * Keeps every calculated period in History without showing it to staff.
+ *
+ * Called straight after a calculation, so "I ran the report" and "the report is saved"
+ * are the same act — publishing is then only about who can see it.
+ */
+export async function saveDraftPayouts(input: PublishInput): Promise<PublishState> {
+  return publishPayouts({ ...input, status: "draft", replaceExisting: true });
 }
