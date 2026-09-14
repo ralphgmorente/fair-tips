@@ -1659,6 +1659,78 @@ body::before {
   white-space: nowrap;
 }
 
+/* Errors get their own full-width row, so the sentence that says what to do next is
+   never cut off at the edge of the card. */
+.upload-error {
+  grid-column: 1 / -1;
+  color: var(--danger);
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 1.45;
+}
+
+/*
+ * The phone view of the payout table. The full table carries nine columns, which stacked
+ * into nine labelled rows per person — most of a screen each, ten people deep. This says
+ * the same thing in one row: who, and what they are owed.
+ */
+.payout-list {
+  display: none;
+  padding: 0;
+  margin: 0 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  list-style: none;
+  overflow: hidden;
+}
+
+.payout-list li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border-top: 1px solid var(--line);
+}
+
+.payout-list li:first-child {
+  border-top: 0;
+}
+
+.payout-who {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.payout-who strong {
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.payout-who small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.payout-amount {
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+  font-size: 1rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.payout-list-total {
+  background: var(--surface-soft);
+}
+
+.payout-list-empty {
+  display: block;
+  color: var(--muted);
+  text-align: center;
+}
+
 .setup-footer {
   display: flex;
   align-items: center;
@@ -2394,24 +2466,67 @@ tfoot td {
     flex: 0 0 auto;
   }
 
+  @media (max-width: 430px) {
+    .sidebar-nav button {
+      gap: 0;
+      padding: 0 4px;
+      font-size: 0.84rem;
+    }
+
+    .sidebar-nav button svg {
+      display: none;
+    }
+  }
+
   /* The checklist was white text for the dark rail; on the light header it needs the
      page's own colours. */
   .sidebar-support {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 0;
-    border-color: var(--line);
-    background: var(--surface-soft);
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .sidebar-support strong {
-    color: var(--ink);
+  .sidebar-support::-webkit-scrollbar {
+    display: none;
   }
 
-  .sidebar-support span {
-    color: var(--ink-soft);
+  /* The heading is redundant once the items read as chips in a row. */
+  .sidebar-support > strong {
+    display: none;
+  }
+
+  .sidebar-support .checklist {
+    display: flex;
+    gap: 8px;
+  }
+
+  .checklist-item {
+    flex: 0 0 auto;
   }
 
   .checklist-item button {
-    color: var(--ink-soft);
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-soft);
+    white-space: nowrap;
+  }
+
+  .checklist-item.warn button {
+    border-color: rgba(168, 93, 9, 0.3);
+    background: var(--warning-soft);
+    color: var(--warning);
+  }
+
+  .sidebar-support span {
+    color: inherit;
   }
 
   .checklist-item button:hover {
@@ -2518,6 +2633,15 @@ tfoot td {
 }
 
 @media (max-width: 760px) {
+  /* The compact list replaces the nine-column table on a phone. */
+  .payout-list {
+    display: block;
+  }
+
+  #payouts .table-scroll {
+    display: none;
+  }
+
   .title-row {
     flex-wrap: wrap;
   }
@@ -2696,6 +2820,14 @@ tfoot td {
     flex: 1 1 calc(50% - 5px);
     width: auto;
     min-width: 0;
+  }
+
+  /* The primary action gets its own full-width row, the way a native app puts its
+     confirm button. */
+  .dashboard-actions > .primary-button,
+  .setup-actions > .primary-button {
+    flex: 1 1 100%;
+    order: 1;
   }
 
   .primary-button.compact,

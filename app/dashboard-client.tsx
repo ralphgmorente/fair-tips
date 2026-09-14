@@ -344,10 +344,10 @@ export function DashboardClient({
           rows: null,
           error:
             detected === null
-              ? "This is not a Clover export. Upload the file exactly as Clover produced it."
-              : `This is the ${UPLOAD_KIND_LABELS[detected]}, not ${
-                  kind === "timesheet" ? "a timesheet" : "a sales report"
-                }. Put it in the ${UPLOAD_KIND_LABELS[detected]} box instead.`,
+              ? "This file is not a Clover export. Upload it exactly as Clover produced it, without opening and re-saving it first."
+              : kind === "timesheet"
+                ? `That file is the ${UPLOAD_KIND_LABELS[detected]}. This box needs the timesheet: in Clover open Employees \u203a Timesheets, export it, and upload that file here.`
+                : `That file is the ${UPLOAD_KIND_LABELS[detected]}. This box needs a sales report: in Clover open Reports \u203a Payments, export it, and upload that file here.`,
           status: "error",
           contentHash
         });
@@ -2580,13 +2580,11 @@ function UploadPanel({
   const isReading = upload.status === "reading";
   // An empty slot says nothing: three "Waiting" badges beside three empty slots was noise
   // stating the obvious. A badge appears only once the slot has news to report.
-  const statusText = isError
-    ? upload.error
-    : isReady
-      ? `${upload.rows?.length ?? 0} rows`
-      : isReading
-        ? "Reading"
-        : "";
+  const statusText = isReady
+    ? `${upload.rows?.length ?? 0} rows`
+    : isReading
+      ? "Reading"
+      : "";
   const Icon = isReady ? CheckCircle2 : isError ? AlertTriangle : Upload;
 
   return (
@@ -2605,11 +2603,10 @@ function UploadPanel({
           {upload.fileName || "Choose a file"}
         </span>
       </span>
-      {statusText ? (
-        <span className={isError ? "upload-status error-text" : "upload-status"}>
-          {statusText}
-        </span>
-      ) : null}
+      {statusText ? <span className="upload-status">{statusText}</span> : null}
+      {/* A whole sentence, on its own row. As a badge beside the file name it was
+          clipped at the edge of the card, which hid the half that says what to do. */}
+      {isError ? <span className="upload-error">{upload.error}</span> : null}
     </label>
   );
 }
@@ -2872,13 +2869,13 @@ function EmployeeTable({
     const pool = hideUnpaid
       ? result.employees.filter((employee) => employee.tipShare > 0)
       : result.employees;
-    if (!query) {
-      return pool;
-    }
+    const matches = query
+      ? pool.filter((employee) => normalizeSearch(employee.employee).includes(query))
+      : pool;
 
-    return pool.filter((employee) =>
-      normalizeSearch(employee.employee).includes(query)
-    );
+    // Biggest payout first, matching History. Alphabetical buried the question the
+    // table is read to answer.
+    return [...matches].sort((a, b) => b.tipShare - a.tipShare);
   }, [employeeQuery, hideUnpaid, result.employees]);
 
   // Totals are summed over the rows actually shown, not the whole result. With a search
@@ -2943,14 +2940,43 @@ function EmployeeTable({
           {result.metrics.employeesFound} employees
         </span>
       </div>
-      <PublishPanel publish={publish} />
-      {/* The method is the point of the app, not an implementation detail: tips follow who
-          was clocked in for each order, not hours worked. Saying so here heads off the
-          "why did they get more than me on fewer hours" question. */}
-      <p className="method-note">
-        Each order&rsquo;s tip is split equally between the staff clocked in at that
-        moment, so payout follows coverage rather than total hours.
-      </p>
+      {/* One row per person, legible on a phone. The full table below carries the same
+          figures broken out, and takes most of a screen per employee stacked up. */}
+      <ul className="payout-list">
+        {visibleEmployees.length === 0 ? (
+          <li className="payout-list-empty">
+            {result.employees.length === 0
+              ? "No employees were found in the timesheet report."
+              : "No employees match this search."}
+          </li>
+        ) : (
+          visibleEmployees.map((employee) => (
+            <li key={employee.employee}>
+              <span className="employee-avatar">{employeeInitials(employee.employee)}</span>
+              <span className="payout-who">
+                <strong>{employee.employee}</strong>
+                <small>
+                  {formatNumber(employee.paidHours)} h &middot;{" "}
+                  {formatPercent(employee.sharePercent)} of tips
+                  {employee.eventTipShare > 0
+                    ? ` \u00b7 ${formatCurrency(employee.eventTipShare)} from events`
+                    : ""}
+                </small>
+              </span>
+              <span className="payout-amount">{formatCurrency(employee.tipShare)}</span>
+            </li>
+          ))
+        )}
+        {visibleEmployees.length ? (
+          <li className="payout-list-total">
+            <span className="payout-who">
+              <strong>{isFiltered ? "Filtered total" : "Total"}</strong>
+              <small>{formatNumber(totals.paidHours)} h</small>
+            </span>
+            <span className="payout-amount">{formatCurrency(totals.totalTips)}</span>
+          </li>
+        ) : null}
+      </ul>
       <div className="table-scroll">
         <table className="summary-table">
           <thead>
@@ -3047,6 +3073,15 @@ function EmployeeTable({
           </tfoot>
         </table>
       </div>
+      {/* The method is the point of the app, not an implementation detail: tips follow who
+          was clocked in for each order, not hours worked. Saying so here heads off the
+          "why did they get more than me on fewer hours" question. It sits below the
+          figures, which is what people came for. */}
+      <p className="method-note">
+        Each order&rsquo;s tip is split equally between the staff clocked in at that
+        moment, so payout follows coverage rather than total hours.
+      </p>
+      <PublishPanel publish={publish} />
     </section>
   );
 }
@@ -3059,10 +3094,11 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
     <section className={errors.length ? "validation-panel has-errors" : "validation-panel"}>
       <div className="section-heading">
         <h2>Validation</h2>
-        <span>
-          {errors.length} {errors.length === 1 ? "error" : "errors"}, {warnings.length}{" "}
-          {warnings.length === 1 ? "warning" : "warnings"}
-        </span>
+        {errors.length ? (
+          <span>
+            {errors.length} {errors.length === 1 ? "error" : "errors"} to fix
+          </span>
+        ) : null}
       </div>
       {issues.length === 0 ? (
         <div className="validation-ok">
