@@ -79,7 +79,7 @@ body::before {
   position: fixed;
   inset: 0 0 auto 0;
   height: env(safe-area-inset-top);
-  background: #074d40;
+  background: var(--surface);
   z-index: 60;
   pointer-events: none;
 }
@@ -2330,9 +2330,18 @@ tfoot td {
     display: block;
   }
 
+  /*
+   * On a phone the top of the app sits directly under the iOS status bar, and iOS draws
+   * that clock in dark text with no way for a web app to override it. So the header is
+   * light here rather than the desktop's dark rail: it reads like an iOS navigation bar,
+   * and the status bar above it is part of the same surface.
+   */
   .app-sidebar {
     position: static;
     display: grid;
+    background: var(--surface);
+    color: var(--ink);
+    border-bottom: 1px solid var(--line);
     /* The desktop column is a full-height sticky rail. On a phone it is a short header
        strip, so the row template and the viewport height both have to go, or the nav
        alone fills the screen. */
@@ -2354,8 +2363,23 @@ tfoot td {
     gap: 6px;
   }
 
+  .sidebar-nav button.active,
+  .sidebar-nav button:hover {
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+  }
+
+  .brand-lockup strong {
+    color: var(--ink);
+  }
+
+  .brand-lockup small {
+    color: var(--muted);
+  }
+
   .sidebar-nav button {
     flex: 1 1 0;
+    color: var(--ink-soft);
     justify-content: center;
     width: auto;
     min-width: 0;
@@ -2370,8 +2394,37 @@ tfoot td {
     flex: 0 0 auto;
   }
 
+  /* The checklist was white text for the dark rail; on the light header it needs the
+     page's own colours. */
   .sidebar-support {
     margin-top: 0;
+    border-color: var(--line);
+    background: var(--surface-soft);
+  }
+
+  .sidebar-support strong {
+    color: var(--ink);
+  }
+
+  .sidebar-support span {
+    color: var(--ink-soft);
+  }
+
+  .checklist-item button {
+    color: var(--ink-soft);
+  }
+
+  .checklist-item button:hover {
+    background: var(--surface-strong);
+    color: var(--ink);
+  }
+
+  .checklist-item.warn button svg {
+    color: var(--warning);
+  }
+
+  .checklist-item.done button svg {
+    color: var(--accent);
   }
 
   .brand-lockup {
