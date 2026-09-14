@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { CalendarDays, CircleDollarSign, Clock, Wallet } from "lucide-react";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { currentStoreId } from "@/lib/current-store";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/tip-calculator";
 import { SignOutButton } from "./sign-out-button";
 
@@ -30,17 +31,36 @@ export default async function MyTipsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email, employee_key")
+    .select("full_name, email")
     .eq("id", claims.sub)
     .maybeSingle();
 
-  // Row level security already limits this to the signed-in person's own rows.
-  const { data } = await supabase
-    .from("payouts")
-    .select(
-      "paid_hours, store_tips, event_tips, total_tips, share_percent, pay_periods(label, published_at)"
-    )
-    .order("published_at", { ascending: false, referencedTable: "pay_periods" });
+  // The timesheet name is per store: the same person can be "Ana" at one venue and
+  // "Ana Diaz" at another, and it is what a payout is matched on.
+  const storeId = await currentStoreId(supabase);
+  const { data: membership } = storeId
+    ? await supabase
+        .from("store_members")
+        .select("employee_key")
+        .eq("store_id", storeId)
+        .eq("user_id", claims.sub)
+        .maybeSingle()
+    : { data: null };
+
+  const employeeKey = membership?.employee_key ?? null;
+
+  // Filtered here, not left to row level security. A manager is allowed to read every
+  // payout in their store, so without this the page added up the whole team's tips and
+  // presented the total as theirs.
+  const { data } = employeeKey
+    ? await supabase
+        .from("payouts")
+        .select(
+          "paid_hours, store_tips, event_tips, total_tips, share_percent, pay_periods(label, published_at)"
+        )
+        .eq("employee_key", employeeKey)
+        .order("published_at", { ascending: false, referencedTable: "pay_periods" })
+    : { data: null };
 
   const payouts = (data ?? []) as unknown as PayoutRow[];
   const lifetime = payouts.reduce((total, row) => total + Number(row.total_tips), 0);
@@ -69,9 +89,9 @@ export default async function MyTipsPage() {
           <span>
             <strong>No payouts published yet</strong>
             <small>
-              {profile?.employee_key
-                ? "Your manager has not published a pay period yet. Check back after payday."
-                : "Your account is not linked to a name on the timesheet yet. Ask your manager to link it."}
+              {employeeKey
+                ? "Your manager has not shared a pay period yet. Check back after payday."
+                : "Your account is not linked to a name on the timesheet, so there is nothing to show here. Ask your manager to link it."}
             </small>
           </span>
         </section>

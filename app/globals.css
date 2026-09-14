@@ -2964,6 +2964,12 @@ tfoot td {
   margin: 0;
 }
 
+/* "Sign out" was wrapping onto two lines beside a long name. */
+.staff-header .secondary-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .staff-total {
   display: flex;
   align-items: center;
