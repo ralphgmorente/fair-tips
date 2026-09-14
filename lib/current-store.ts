@@ -10,6 +10,14 @@ import type { createClient } from "@/lib/supabase/server";
 export async function currentStoreId(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<string | null> {
-  const { data } = await supabase.from("stores").select("id").limit(1).maybeSingle();
+  // Ordered, not just limited: an unordered "first row" can differ between two requests
+  // in the same page load, which would show one store's figures beside another's.
+  const { data } = await supabase
+    .from("stores")
+    .select("id")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
   return data?.id ?? null;
 }
