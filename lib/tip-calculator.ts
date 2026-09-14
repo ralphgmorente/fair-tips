@@ -403,13 +403,15 @@ export function calculateFlexibleReports({
     issues.push({
       severity: "error",
       source: "sales",
-      message: "Upload an Orders Report or Payments Report to calculate the business dashboard."
+      message:
+        "There is nothing to calculate yet. Upload a sales file from Clover \u2014 either the Orders report or the Payments report."
     });
   } else if (parsedSales.orders.length === 0 && !issues.some((issue) => issue.severity === "error")) {
     issues.push({
       severity: "error",
       source: "sales",
-      message: "No order or payment rows were found after the report header."
+      message:
+        "The sales file has column titles but no sales underneath them. It is probably the wrong date range, or the export ran before any sales were recorded."
     });
   }
 
@@ -452,13 +454,15 @@ export function calculateFlexibleReports({
     issues.push({
       severity: "error",
       source: "timesheet",
-      message: "No timesheet rows were found after the report header."
+      message:
+        "The timesheet has column titles but no shifts underneath them. Check the dates you picked when exporting it from Clover."
     });
   } else if (timesheetGrid && validShifts.length === 0) {
     issues.push({
       severity: "error",
       source: "timesheet",
-      message: "No valid clock-in and clock-out shifts were found."
+      message:
+        "No shift in the timesheet has both a clock-in and a clock-out time, so there is no way to tell who was working. Tips cannot be split until at least one complete shift is in the file."
     });
   }
 
@@ -495,7 +499,8 @@ export function calculateFlexibleReports({
         source: "sales",
         row: detail.rowNumber,
         field: "Order Date",
-        message: `A tipped ${detail.pool} order has a date/time that could not be parsed, so it is unallocated.`
+        message:
+          `A ${detail.pool} sale with a tip has a date and time that could not be read, so nobody was credited for it. Find that sale in the file and check how its date is written.`
       });
     }
   });
@@ -594,7 +599,8 @@ export function calculateFlexibleReports({
       severity: "warning",
       source: "timesheet",
       field: "Role",
-      message: "The timesheet has no Role column, so event tips cannot be matched to Evento shifts."
+      message:
+        "The timesheet has no Role column, so there is no way to see who was working the event. Those tips were shared with the whole store team instead. Export the timesheet from Clover again with the Role column included."
     });
   }
 
@@ -602,7 +608,8 @@ export function calculateFlexibleReports({
     issues.push({
       severity: "warning",
       source: "calculation",
-      message: "Event tips were found, but no active Evento shifts matched those event order times."
+      message:
+        "Some sales came from the event, but nobody was marked as working the event at those times, so the tips were shared with the store team. Check the event shift is on the timesheet and that its role is spelled the same way as in Settings."
     });
   }
 
@@ -640,7 +647,8 @@ export function calculateFlexibleReports({
         issues.push({
           severity: "warning",
           source: "calculation",
-          message: `${count} ${count === 1 ? "sale is" : "sales are"} recorded under "${name}", who has no shift on the timesheet. If that is a person they earned no tips; if it is an old till account, add it to Settings to stop this notice.`
+          message:
+            `${count} ${count === 1 ? "sale is" : "sales are"} recorded under "${name}", who has no shift on the timesheet, so no tips were paid for them. If ${name} worked, add their shift in Clover and export the timesheet again. If it is an old login left on a terminal and not a real person, add the name in Settings so this stops appearing.`
         });
       });
   }
@@ -654,7 +662,12 @@ export function calculateFlexibleReports({
       issues.push({
         severity: "warning",
         source: "sales",
-        message: `An event terminal is set, but this report has no Device column, so event sales cannot be told apart. Upload the Payments export to split them.`
+        message:
+          `Settings names "${eventDeviceName.trim()}" as the event terminal, but the sales file ` +
+          `you uploaded does not say which terminal rang up each sale, so event sales are ` +
+          `still being counted as store sales. To separate them, go to the Clover dashboard, ` +
+          `open Reports \u203a Payments, export that report, and upload it here as well \u2014 ` +
+          `the payments file records the terminal for every sale.`
       });
     }
   }
@@ -666,12 +679,15 @@ export function calculateFlexibleReports({
   const hasEventShift = parsedTimesheet.shifts.some((shift) => shift.isEventRole);
   const hasAnyOrderNumber = parsedSales.orders.some((order) => order.orderNumber.trim() !== "");
 
-  if (hasEventShift && metrics.eventOrders === 0 && !hasAnyOrderNumber) {
+  // Only when no event terminal is named. With one set, the warning above already
+  // explains the same problem and tells the manager what to upload; showing both made
+  // the second one contradict the first by asking for a setting already filled in.
+  if (eventDevice === "" && hasEventShift && metrics.eventOrders === 0 && !hasAnyOrderNumber) {
     issues.push({
       severity: "warning",
       source: "sales",
       message:
-        "An Evento shift was worked, but no sales row carries an order number, so event sales could not be separated and their tips went into the store pool."
+        "Someone worked the event, but the sales file never says which sales happened there, so their tips were shared with the store team instead. To keep them separate, name the event terminal in Settings and also upload the Payments report from Clover, which records the terminal for each sale."
     });
   }
 
@@ -679,7 +695,8 @@ export function calculateFlexibleReports({
     issues.push({
       severity: "warning",
       source: "sales",
-      message: "Some sales rows are not marked Paid or Success. The app includes them for review."
+      message:
+        "Some sales are not marked as paid \u2014 they may be refunds, voids, or still open. They are counted in the totals so you can see them. If any of them should not count, remove those rows and calculate again."
     });
   }
 
@@ -752,7 +769,8 @@ function addUploadedBusinessReport(
     reports.issues.push({
       severity: "error",
       source: "sales",
-      message: `The ${formatReportKind(uploadSlot)} upload is not a recognized Clover Orders, Payments, or Sales report.`
+      message:
+        `The file you uploaded as the ${formatReportKind(uploadSlot)} is not a Clover sales export. Upload the file exactly as Clover produced it, without opening and re-saving it.`
     });
     return;
   }
@@ -762,7 +780,8 @@ function addUploadedBusinessReport(
     reports.issues.push({
       severity: "warning",
       source: "sales",
-      message: `A second ${formatReportKind(detectedKind)} was uploaded and ignored to avoid double-counting.`
+      message:
+        `Two copies of the ${formatReportKind(detectedKind)} were uploaded. Only the first was used \u2014 counting the same sales twice would double everyone\u2019s tips. Remove the one you do not want and calculate again.`
     });
     return;
   }
@@ -771,7 +790,8 @@ function addUploadedBusinessReport(
     reports.issues.push({
       severity: "warning",
       source: "sales",
-      message: `The ${formatReportKind(uploadSlot)} slot contained a ${formatReportKind(detectedKind)} and was processed that way.`
+      message:
+        `The file uploaded as the ${formatReportKind(uploadSlot)} is really a ${formatReportKind(detectedKind)}. It was read as a ${formatReportKind(detectedKind)}, so the figures are right \u2014 the two boxes are just swapped.`
     });
   }
 
@@ -949,7 +969,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
           severity: "error",
           source: "sales",
           message:
-            "Missing required sales headers. Upload either a Clover orders export or a Clover payments export."
+            "This file does not have the columns a Clover sales export has, so none of it could be read. Upload the Orders report or the Payments report straight from Clover."
         }
       ]
     };
@@ -1023,7 +1043,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         source: "sales",
         row: rowNumber,
         field: tipColumn.header,
-        message: "Tip must be a number."
+        message: "The tip in this row is not a number, so this sale was left out. Check the row in the sales file."
       });
       return;
     }
@@ -1035,7 +1055,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         source: "sales",
         row: rowNumber,
         field: orderTotalColumn.header,
-        message: `${orderTotalColumn.header} must be a number.`
+        message: `${orderTotalColumn.header} in this row is not a number, so this sale was left out of the totals.`
       });
       return;
     }
@@ -1078,7 +1098,8 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         source: "sales",
         row: rowNumber,
         field: "Order ID",
-        message: "Order ID is blank. The row is still included in the calculation."
+        message:
+          "This sale has no order number. It is still counted, so nothing is missing \u2014 only worth a look if you expected every sale to have one."
       });
     } else if (!isPaymentsReport && seenOrderIds.has(orderId)) {
       issues.push({
@@ -1086,7 +1107,8 @@ export function parseSalesReport(grid: Grid): ParsedSales {
         source: "sales",
         row: rowNumber,
         field: "Order ID",
-        message: "Duplicate Order ID found. Confirm the sales export was not appended twice."
+        message:
+          "This order number appears more than once. If the same export was pasted in twice, every sale in it is being counted twice and the tips will come out too high."
       });
     }
 
@@ -1133,7 +1155,7 @@ export function parseSalesReport(grid: Grid): ParsedSales {
       // manager had to go and fix in Clover.
       message: `${skippedFailedPayments} declined card ${
         skippedFailedPayments === 1 ? "payment was" : "payments were"
-      } excluded from sales and tips, as expected.`
+      } left out of sales and tips. That is correct and there is nothing to fix.`
     });
   }
 
@@ -1152,7 +1174,8 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
         {
           severity: "error",
           source: "timesheet",
-          message: `Missing required timesheet headers: ${TIMESHEET_REQUIRED.join(", ")}.`
+          message:
+            `The timesheet is missing these columns: ${TIMESHEET_REQUIRED.join(", ")}. Export it from Clover again without removing or renaming any columns.`
         }
       ]
     };
@@ -1234,8 +1257,8 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
         row: rowNumber,
         message:
           neverClockedIn && scheduledDate
-            ? `${employee || "An employee"} was rostered on ${scheduledDate} but never clocked in, so that shift earned no tips.`
-            : `Shift for ${employee || "an employee"} is missing a valid clock-in or clock-out time.`
+            ? `${employee || "An employee"} was scheduled on ${scheduledDate} but never clocked in or out, so no tips were given for that shift. If they did work it, add the times in Clover and export the timesheet again.`
+            : `A shift for ${employee || "an employee"} is missing its clock-in or clock-out time, so it was left out of the tip split. Fix the times in Clover and export the timesheet again.`
       });
     }
 
@@ -1245,7 +1268,8 @@ export function parseTimesheetReport(grid: Grid): ParsedTimesheet {
         source: "timesheet",
         row: rowNumber,
         field: "Total paid hours",
-        message: "Paid hours cannot be negative."
+        message:
+          "This shift has negative paid hours, which cannot be right. Fix the clock-in and clock-out times in Clover and export the timesheet again."
       });
     }
 
@@ -1910,7 +1934,7 @@ function findOverlappingShifts(validShifts: Shift[]): ValidationIssue[] {
           severity: "warning",
           source: "timesheet",
           row: current.rowNumber,
-          message: `${current.employee} has overlapping shifts. They are counted once per order.`
+          message: `${current.employee} has two shifts that overlap in time. They are credited once for each sale, so their tips are not doubled \u2014 nothing to fix unless the timesheet is wrong.`
         });
       }
     }
