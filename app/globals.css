@@ -2328,15 +2328,32 @@ tfoot td {
   .app-sidebar {
     position: static;
     display: grid;
+    /* The desktop column is a full-height sticky rail. On a phone it is a short header
+       strip, so the row template and the viewport height both have to go, or the nav
+       alone fills the screen. */
+    grid-template-rows: none;
     gap: 14px;
-    min-height: auto;
-    padding: 16px 18px;
+    height: auto;
+    min-height: 0;
+    padding: 14px 16px;
+    padding-top: calc(14px + env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
   }
 
   .sidebar-nav {
     display: flex;
+    align-content: stretch;
     gap: 8px;
     overflow-x: auto;
+    overflow-y: hidden;
+    /* Swiping the tab strip sideways must not fight the page scrolling down. */
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar-nav button {
