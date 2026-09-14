@@ -2921,6 +2921,11 @@ function EmployeeTable({
     [visibleEmployees]
   );
   const isFiltered = visibleEmployees.length !== result.employees.length;
+  // With no event this week, "Event hours" and "Event tips" are two columns of zeros
+  // pushing the totals off the right-hand edge, and "Store tips" repeats "Total tips".
+  const hasEvent = result.employees.some(
+    (employee) => employee.eventHours > 0 || employee.eventTipShare > 0
+  );
 
   return (
     <section className="table-panel" id="payouts">
@@ -2997,11 +3002,11 @@ function EmployeeTable({
           <thead>
             <tr>
               <th>Employee</th>
-              <th>Store hours</th>
-              <th>Event hours</th>
+              {hasEvent ? <th className="breakdown-col">Store hours</th> : null}
+              {hasEvent ? <th className="breakdown-col">Event hours</th> : null}
               <th>Total hours</th>
-              <th>Store tips</th>
-              <th>Event tips</th>
+              {hasEvent ? <th className="breakdown-tips">Store tips</th> : null}
+              {hasEvent ? <th className="breakdown-tips">Event tips</th> : null}
               <th>Total tips</th>
               <th>Share %</th>
               <th>Review</th>
@@ -3010,7 +3015,7 @@ function EmployeeTable({
           <tbody>
             {visibleEmployees.length === 0 ? (
               <tr>
-                <td className="table-empty" colSpan={9}>
+                <td className="table-empty" colSpan={hasEvent ? 9 : 5}>
                   {result.employees.length === 0
                     ? "No employees were found in the timesheet report."
                     : "No employees match this search."}
@@ -3025,21 +3030,29 @@ function EmployeeTable({
                       <strong>{employee.employee}</strong>
                     </span>
                   </td>
-                  <td data-label="Store hours" className="numeric">
-                    {formatNumber(employee.storeHours)}
-                  </td>
-                  <td data-label="Event hours" className="numeric">
-                    {formatNumber(employee.eventHours)}
-                  </td>
+                  {hasEvent ? (
+                    <td data-label="Store hours" className="numeric breakdown-col">
+                      {formatNumber(employee.storeHours)}
+                    </td>
+                  ) : null}
+                  {hasEvent ? (
+                    <td data-label="Event hours" className="numeric breakdown-col">
+                      {formatNumber(employee.eventHours)}
+                    </td>
+                  ) : null}
                   <td data-label="Total hours" className="numeric">
                     {formatNumber(employee.paidHours)}
                   </td>
-                  <td data-label="Store tips" className="numeric payout">
-                    {formatCurrency(employee.storeTipShare)}
-                  </td>
-                  <td data-label="Event tips" className="numeric payout">
-                    {formatCurrency(employee.eventTipShare)}
-                  </td>
+                  {hasEvent ? (
+                    <td data-label="Store tips" className="numeric payout breakdown-tips">
+                      {formatCurrency(employee.storeTipShare)}
+                    </td>
+                  ) : null}
+                  {hasEvent ? (
+                    <td data-label="Event tips" className="numeric payout breakdown-tips">
+                      {formatCurrency(employee.eventTipShare)}
+                    </td>
+                  ) : null}
                   <td data-label="Total tips" className="numeric payout">
                     {formatCurrency(employee.tipShare)}
                   </td>
@@ -3058,21 +3071,29 @@ function EmployeeTable({
           <tfoot>
             <tr>
               <td data-label="Employee">{isFiltered ? "Filtered total" : "Total"}</td>
-              <td data-label="Store hours" className="numeric">
-                {formatNumber(totals.storeHours)}
-              </td>
-              <td data-label="Event hours" className="numeric">
-                {formatNumber(totals.eventHours)}
-              </td>
+              {hasEvent ? (
+                <td data-label="Store hours" className="numeric breakdown-col">
+                  {formatNumber(totals.storeHours)}
+                </td>
+              ) : null}
+              {hasEvent ? (
+                <td data-label="Event hours" className="numeric breakdown-col">
+                  {formatNumber(totals.eventHours)}
+                </td>
+              ) : null}
               <td data-label="Total hours" className="numeric">
                 {formatNumber(totals.paidHours)}
               </td>
-              <td data-label="Store tips" className="numeric payout">
-                {formatCurrency(totals.storeTips)}
-              </td>
-              <td data-label="Event tips" className="numeric payout">
-                {formatCurrency(totals.eventTips)}
-              </td>
+              {hasEvent ? (
+                <td data-label="Store tips" className="numeric payout breakdown-tips">
+                  {formatCurrency(totals.storeTips)}
+                </td>
+              ) : null}
+              {hasEvent ? (
+                <td data-label="Event tips" className="numeric payout breakdown-tips">
+                  {formatCurrency(totals.eventTips)}
+                </td>
+              ) : null}
               <td data-label="Total tips" className="numeric payout">
                 {formatCurrency(totals.totalTips)}
               </td>

@@ -1731,6 +1731,42 @@ body::before {
   text-align: center;
 }
 
+/*
+ * Between a phone and a wide desktop the nine-column payout table scrolled sideways, and
+ * what scrolled out of sight was the right-hand end: total tips and share, the two
+ * columns the table exists for. Drop the breakdown columns instead — the totals beside
+ * them still add up.
+ */
+/*
+ * When the window cannot hold every column, what used to scroll out of sight was the
+ * right-hand end: total tips and share, the two the table exists for. Drop the
+ * reassurance column first, then the hours breakdown, whose total sits beside it.
+ */
+@media (max-width: 1020px) {
+  #payouts .summary-table th:last-child,
+  #payouts .summary-table td:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 1240px) {
+  #payouts .summary-table .breakdown-col {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  #payouts .summary-table .breakdown-tips {
+    display: none;
+  }
+}
+
+@media (max-width: 1240px) {
+  #payouts .summary-table {
+    min-width: 0;
+  }
+}
+
 .setup-footer {
   display: flex;
   align-items: center;
@@ -2173,6 +2209,9 @@ body::before {
 
 table {
   width: 100%;
+  /* Wide enough that nine columns stay readable, but the payout table drops columns as
+     the window narrows, so it must be allowed to shrink with them rather than keep
+     reserving room for columns that are no longer drawn. */
   min-width: 1040px;
   border-collapse: separate;
   border-spacing: 0;
@@ -3413,6 +3452,8 @@ tfoot td {
   align-items: center;
   gap: 8px;
   width: 100%;
+  /* Comfortably tappable rather than a 33px sliver. */
+  min-height: 38px;
   padding: 7px 8px;
   border-radius: 7px;
   background: transparent;
