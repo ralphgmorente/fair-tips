@@ -667,11 +667,36 @@ function DashboardHeader({
 
   return (
     <section className="dashboard-header">
+      {/* Who is signed in, and signing out, are account chores rather than things you do
+          to this period. Kept quiet and above, so the buttons below are all one kind of
+          thing and the row has somewhere to look. */}
+      <div className="header-utility">
+        <span className="session-identity" title={user.email}>
+          <UserRound aria-hidden="true" size={15} />
+          <span>{user.fullName || user.email}</span>
+          {user.role === "admin" || user.role === "manager" ? (
+            <span className="role-pill">{user.role === "admin" ? "Admin" : "Manager"}</span>
+          ) : null}
+        </span>
+        <button
+          className="link-button"
+          type="button"
+          onClick={onSignOut}
+          disabled={isSigningOut}
+        >
+          <LockKeyhole aria-hidden="true" size={14} />
+          {isSigningOut ? "Signing out\u2026" : "Sign out"}
+        </button>
+      </div>
+
       <div className="dashboard-title">
         <div className="title-row">
           <h1>{title}</h1>
+          {/* Once it is published, that is the status worth stating. */}
           {showsCalculation && result && !hasErrors ? (
-            <span className="review-pill ready">Ready to review</span>
+            <span className="review-pill ready">
+              {isPublished ? "Published to staff" : "Ready to review"}
+            </span>
           ) : null}
         </div>
         {/* Before a calculation there is no period and nothing to export, so neither is
@@ -686,30 +711,12 @@ function DashboardHeader({
       </div>
 
       <div className="dashboard-actions">
-        <span className="session-identity" title={user.email}>
-          <UserRound aria-hidden="true" size={16} />
-          <span>{user.fullName || user.email}</span>
-          {/* Which account you are signed in as decides what you are allowed to do, so
-              it should not take a trip to Settings to find out. */}
-          {user.role === "admin" || user.role === "manager" ? (
-            <span className="role-pill">{user.role === "admin" ? "Admin" : "Manager"}</span>
-          ) : null}
-        </span>
         {showReportSetup || !showsCalculation ? null : (
           <button className="secondary-button compact" type="button" onClick={onNewReport}>
             <RotateCcw aria-hidden="true" size={17} />
             Start fresh
           </button>
         )}
-        <button
-          className="secondary-button compact"
-          type="button"
-          onClick={onSignOut}
-          disabled={isSigningOut}
-        >
-          <LockKeyhole aria-hidden="true" size={17} />
-          {isSigningOut ? "Signing out..." : "Sign out"}
-        </button>
         {showsCalculation && result && !hasErrors && result.capabilities.hasTipDistribution ? (
           <>
             <button className="secondary-button compact" type="button" onClick={onExport}>

@@ -231,33 +231,71 @@ body::before {
   padding-bottom: calc(56px + env(safe-area-inset-bottom));
 }
 
+/*
+ * Three bands: a quiet utility line, then the page's identity on the left with the
+ * actions that change this period on the right. Previously the account, signing out and
+ * the period actions were one undifferentiated row of identical buttons.
+ */
 .dashboard-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  /* Wraps as a whole when the buttons and the title cannot share a line. Without this
-     the status pill overflowed the title block and sat on top of the user's name. */
-  flex-wrap: wrap;
-  gap: 14px 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 20px;
   margin-bottom: 22px;
 }
 
-.dashboard-title {
-  flex: 1 1 260px;
+/* Side by side only where both genuinely fit. Sharing a line sooner squeezed the period
+   chip until its own dates were cut off. */
+@media (min-width: 1220px) {
+  .dashboard-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+
+  .dashboard-actions {
+    justify-self: end;
+  }
+}
+
+.header-utility {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
 }
 
 .dashboard-actions {
-  flex: 0 1 auto;
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
 }
 
-/* Who you are is a label, not an action: it takes its own line above the buttons
-   instead of sitting in the middle of them. */
-.dashboard-actions .session-identity {
-  flex: 0 0 100%;
-  justify-content: flex-end;
-  max-width: 100%;
+/* Signing out is a rare, quiet action; a full button made it compete with publishing. */
+.link-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  white-space: nowrap;
+  background: none;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.link-button:hover:not(:disabled) {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.link-button:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Title, status and period read as one line of context rather than stacking into
@@ -355,14 +393,6 @@ body::before {
 .period-control button:hover,
 .icon-button:hover {
   background: var(--surface-strong);
-}
-
-.dashboard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 /* Header buttons wrap as whole buttons, never mid-label. */
@@ -2695,7 +2725,15 @@ tfoot td {
     padding-bottom: calc(44px + env(safe-area-inset-bottom));
   }
 
-  .dashboard-header,
+  .dashboard-header {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .header-utility {
+    justify-content: center;
+  }
+
   .setup-footer,
   .section-heading {
     align-items: flex-start;
