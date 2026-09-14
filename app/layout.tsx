@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { splashDevices } from "@/lib/splash-devices";
 import { RegisterServiceWorker } from "./register-service-worker";
 
 export const metadata: Metadata = {
@@ -9,6 +10,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
+      // The SVG wins wherever it is supported, so the tab mark stays sharp on any display.
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
       { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }
     ],
@@ -18,43 +22,9 @@ export const metadata: Metadata = {
     capable: true,
     title: "ShiftFlow",
     statusBarStyle: "default",
-    startupImage: [
-      {
-        url: "/splash/launch-1179x2556.png",
-        media:
-          "(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-1290x2796.png",
-        media:
-          "(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-1170x2532.png",
-        media:
-          "(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-1284x2778.png",
-        media:
-          "(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-1125x2436.png",
-        media:
-          "(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-828x1792.png",
-        media:
-          "(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-      },
-      {
-        url: "/splash/launch-750x1334.png",
-        media:
-          "(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-      }
-    ]
+    // Generated alongside the images themselves; iOS shows a blank white screen for
+    // any device size that is not listed here.
+    startupImage: splashDevices
   }
 };
 

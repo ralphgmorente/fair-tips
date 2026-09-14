@@ -8,7 +8,10 @@
  *
  * Only build assets and icons are cached, and only ones this origin served.
  */
-const CACHE = "shiftflow-static-v1";
+// Icons and splash images are not content-hashed, so a cache-first hit would serve the
+// old artwork for ever. Bump this whenever those are regenerated: activate() drops
+// every cache that is not the current one.
+const CACHE = "shiftflow-static-v2";
 
 const CACHEABLE_PREFIXES = ["/_next/static/", "/icons/", "/splash/"];
 
