@@ -79,8 +79,11 @@ h2 {
   position: sticky;
   top: 0;
   display: grid;
-  grid-template-rows: auto auto 1fr;
-  min-height: 100vh;
+  /* The nav takes the slack, so the payout checklist below it stays on screen
+     instead of being pushed past the fold on a short window. */
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  height: 100dvh;
   padding: 24px 18px;
   background:
     linear-gradient(180deg, #074d40 0%, #02382f 58%, #012c26 100%);
@@ -95,16 +98,10 @@ h2 {
 }
 
 .brand-mark {
-  display: grid;
+  /* The app icon itself, so the installed tile and the sidebar are the same mark. */
   width: 42px;
   height: 42px;
-  place-items: center;
-  border-radius: 8px;
-  background: #32b77f;
-  color: #042b24;
-  font-size: 0.82rem;
-  font-weight: 950;
-  letter-spacing: 0.04em;
+  flex: none;
 }
 
 .brand-lockup span:last-child {
@@ -125,7 +122,12 @@ h2 {
 
 .sidebar-nav {
   display: grid;
+  align-content: start;
   gap: 8px;
+  /* min-height:0 lets this row actually shrink; without it a long nav would push
+     the checklist out of the sticky column again. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .sidebar-nav button {
@@ -152,6 +154,7 @@ h2 {
 .sidebar-support {
   align-self: end;
   display: grid;
+  margin-top: 16px;
   gap: 9px;
   padding: 15px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -178,13 +181,25 @@ h2 {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  /* Wraps as a whole when the buttons and the title cannot share a line. Without this
+     the status pill overflowed the title block and sat on top of the user's name. */
+  flex-wrap: wrap;
+  gap: 14px 20px;
   margin-bottom: 22px;
+}
+
+.dashboard-title {
+  flex: 1 1 260px;
+}
+
+.dashboard-actions {
+  flex: 0 1 auto;
 }
 
 .dashboard-title {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .title-row {
@@ -199,6 +214,11 @@ h2 {
 
 .title-row h1 {
   min-width: 0;
+  /* One line, always. A wrapped heading dropped the status pill into its own band and
+     made every view's header a different height. */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .review-pill {
@@ -360,6 +380,7 @@ h2 {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-content: start;
+  container-type: inline-size;
   gap: 5px 11px;
   min-width: 0;
   min-height: 118px;
@@ -367,7 +388,7 @@ h2 {
 }
 
 .executive-card strong {
-  font-size: clamp(1.25rem, 4.2cqi, 1.75rem);
+  font-size: clamp(1.05rem, 8.5cqi, 1.75rem);
 }
 
 .executive-card.has-secondary {
@@ -376,11 +397,13 @@ h2 {
 }
 
 .executive-card.featured {
-  background:
-    radial-gradient(circle at 88% 24%, rgba(255, 255, 255, 0.18), transparent 30%),
-    linear-gradient(145deg, #0d8069 0%, #06483d 100%);
-  color: #ffffff;
-  box-shadow: var(--shadow-strong);
+  border-color: rgba(15, 124, 103, 0.4);
+  background: linear-gradient(180deg, rgba(15, 124, 103, 0.1) 0%, var(--surface) 62%);
+  box-shadow: var(--shadow);
+}
+
+.executive-card.featured strong {
+  color: var(--accent-dark);
 }
 
 .executive-card.warning {
@@ -399,7 +422,7 @@ h2 {
 }
 
 .executive-card.featured .executive-icon {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--accent);
   color: #ffffff;
 }
 
@@ -417,16 +440,10 @@ h2 {
   text-transform: uppercase;
 }
 
-.executive-card.featured .executive-label,
-.executive-card.featured small {
-  color: rgba(255, 255, 255, 0.78);
-}
-
 .executive-card strong {
   align-self: end;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(1.18rem, 1.58vw, 1.48rem);
   font-weight: 920;
   font-variant-numeric: tabular-nums;
   line-height: 1.05;
@@ -442,7 +459,7 @@ h2 {
 .executive-secondary-grid {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
   gap: 6px;
   min-width: 0;
   margin-top: 1px;
@@ -450,16 +467,6 @@ h2 {
   border-top: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface-soft);
-}
-
-.executive-card.featured .executive-secondary-grid {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.executive-card.featured .executive-secondary-grid small,
-.executive-card.featured .executive-secondary-grid strong {
-  color: rgba(255, 255, 255, 0.82);
 }
 
 .executive-secondary-grid > span {
@@ -1682,8 +1689,12 @@ h2 {
 }
 
 .tip-summary-card.featured {
-  background: linear-gradient(145deg, #0d8069 0%, #06483d 100%);
-  color: #ffffff;
+  border-color: rgba(15, 124, 103, 0.4);
+  background: linear-gradient(180deg, rgba(15, 124, 103, 0.1) 0%, var(--surface) 62%);
+}
+
+.tip-summary-card.featured strong {
+  color: var(--accent-dark);
 }
 
 .tip-summary-card.warning {
@@ -1702,7 +1713,7 @@ h2 {
 }
 
 .tip-summary-card.featured .tip-summary-icon {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--accent);
   color: #ffffff;
 }
 
@@ -1730,11 +1741,6 @@ h2 {
   font-size: clamp(1.1rem, 1.6vw, 1.34rem);
   font-weight: 920;
   font-variant-numeric: tabular-nums;
-}
-
-.tip-summary-card.featured small,
-.tip-summary-card.featured em {
-  color: rgba(255, 255, 255, 0.78);
 }
 
 .notice-panel {
@@ -1829,22 +1835,30 @@ h2 {
 }
 
 .warning-details {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(168, 93, 9, 0.3);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--surface-soft);
+  background: var(--warning-soft);
 }
 
 .warning-details summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding: 12px 14px;
   color: var(--warning);
   font-weight: 850;
   cursor: pointer;
   list-style: none;
+}
+
+/* Pushes the chevron to the far edge while the icon stays beside the text. */
+.warning-details summary > span:first-of-type {
+  flex: 1;
+}
+
+.warning-details summary:hover {
+  background: rgba(168, 93, 9, 0.08);
 }
 
 .warning-details summary::-webkit-details-marker {
@@ -1857,6 +1871,52 @@ h2 {
 
 .warning-details .issue-list {
   padding: 0 12px 12px;
+}
+
+.state-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 9px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  vertical-align: middle;
+}
+
+.state-pill.live {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+.filter-toggle.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-dark);
 }
 
 .issue-list {
@@ -1878,7 +1938,7 @@ h2 {
 }
 
 .issue-list strong {
-  text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .issue-list .warning {
@@ -2123,7 +2183,7 @@ tfoot td {
   }
 
   .executive-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   }
 
   .dashboard-top-layout {
@@ -2157,7 +2217,7 @@ tfoot td {
   }
 
   .sidebar-support {
-    display: none;
+    margin-top: 0;
   }
 
   .brand-lockup {

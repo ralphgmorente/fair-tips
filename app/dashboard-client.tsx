@@ -34,7 +34,12 @@ import {
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { publishPayouts, type PublishState } from "@/app/actions/publish-payouts";
+import {
+  publishPayouts,
+  saveDraftPayouts,
+  type PublishInput,
+  type PublishState
+} from "@/app/actions/publish-payouts";
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
 import { loadWorkspaceSettings, saveWorkspaceSettings } from "@/app/actions/workspace-settings";
 import { emptySettings, type WorkspaceSettings } from "@/lib/workspace-settings";
@@ -161,13 +166,15 @@ export function DashboardClient({
       contentHash: upload.contentHash
     }));
   const effectiveUploads = uploads.length ? uploads : restoredUploads;
+  // Short enough to stay on one line beside the status pill and the header buttons.
+  // The long versions wrapped to two lines and left the pill floating on its own.
   const pageTitle =
     activeView === "dashboard"
       ? result
-        ? "Business Dashboard"
-        : "Set up this pay period"
+        ? "Dashboard"
+        : "Set up this period"
       : activeView === "tips"
-        ? "Weekly Tip Distribution"
+        ? "Tip split"
         : activeView === "history"
           ? "Saved periods"
           : "Settings";
@@ -285,6 +292,21 @@ export function DashboardClient({
     setResult(next);
     setRestoredUploads(uploads);
     saveCalculation(next, uploads);
+    // Calculating is what a manager thinks of as "running the report", so that is when
+    // it lands in History. It saves as a draft: only managers see it until it is
+    // published to staff.
+    saveDraftPayouts(buildPublishInput(next, uploads))
+      .then((saved) => {
+        if (saved.status === "error") {
+          console.error("saving the period to history failed", saved.message);
+        }
+      })
+      .catch((error) => {
+        console.error("saving the period to history failed", error);
+      });
+    // Calculating from another tab used to leave you looking at that tab, which read
+    // as "nothing happened". Always land on the figures that were just produced.
+    showView("dashboard");
   }
 
   function handleReset() {
@@ -294,7 +316,12 @@ export function DashboardClient({
     setPaymentsUpload(emptyUpload);
     setTimesheetUpload(emptyUpload);
     setResult(null);
+    // The import screen only lives on the dashboard, so starting fresh has to go there
+    // or the button looks like it did nothing.
+    showView("dashboard");
   }
+
+  const publish = usePublish(result, uploads.length ? uploads : restoredUploads);
 
   async function handleExport() {
     if (!result || hasErrors || !result.capabilities.hasTipDistribution) {
@@ -319,6 +346,8 @@ export function DashboardClient({
           onSignOut={handleSignOut}
           onNewReport={handleReset}
           onExport={handleExport}
+          onPublish={() => publish.publish(false)}
+          isPublishing={publish.isPublishing}
         />
 
         {/* Each tab owns its content. Previously the upload panel replaced whichever view
@@ -327,7 +356,10 @@ export function DashboardClient({
         {activeView === "settings" ? (
           <SettingsView settings={settings} onSettingsChange={setSettings} />
         ) : activeView === "history" ? (
-          <HistoryView />
+          <HistoryView
+            hasUnpublished={Boolean(result && !hasErrors)}
+            onOpenCurrent={() => showView("tips")}
+          />
         ) : activeView === "tips" && !result ? (
           <EmptyView
             title="No tips calculated yet"
@@ -362,11 +394,12 @@ export function DashboardClient({
             {activeView === "dashboard" ? (
               <DashboardView result={result} eventDeviceName={settings.eventDeviceName} />
             ) : (
-              <TipsView result={result} uploads={effectiveUploads} />
+              <TipsView result={result} publish={publish} />
             )}
           </>
         )}
       </main>
+      <PublishConfirm publish={publish} />
     </div>
   );
 }
@@ -390,7 +423,8 @@ function AppSidebar({
   return (
     <aside className="app-sidebar" aria-label="Application navigation">
       <div className="brand-lockup">
-        <span className="brand-mark">SF</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="brand-mark" src="/icons/icon.svg" alt="" width={42} height={42} />
         <span>
           <strong>ShiftFlow</strong>
           <small>Operations</small>
@@ -496,7 +530,9 @@ function DashboardHeader({
   showReportSetup,
   onSignOut,
   onNewReport,
-  onExport
+  onExport,
+  onPublish,
+  isPublishing
 }: {
   title: string;
   result: CalculationResult | null;
@@ -507,6 +543,8 @@ function DashboardHeader({
   onSignOut: () => void;
   onNewReport: () => void;
   onExport: () => void;
+  onPublish: () => void;
+  isPublishing: boolean;
 }) {
   return (
     <section className="dashboard-header">
@@ -534,7 +572,7 @@ function DashboardHeader({
         {showReportSetup ? null : (
           <button className="secondary-button compact" type="button" onClick={onNewReport}>
             <RotateCcw aria-hidden="true" size={17} />
-            New report
+            Start fresh
           </button>
         )}
         <button
@@ -547,10 +585,21 @@ function DashboardHeader({
           {isSigningOut ? "Signing out..." : "Sign out"}
         </button>
         {result && !hasErrors && result.capabilities.hasTipDistribution ? (
-          <button className="primary-button compact" type="button" onClick={onExport}>
-            <Download aria-hidden="true" size={18} />
-            Export Excel
-          </button>
+          <>
+            <button className="secondary-button compact" type="button" onClick={onExport}>
+              <Download aria-hidden="true" size={17} />
+              Export Excel
+            </button>
+            <button
+              className="primary-button compact"
+              type="button"
+              onClick={onPublish}
+              disabled={isPublishing || result.employees.length === 0}
+            >
+              <Users aria-hidden="true" size={18} />
+              {isPublishing ? "Publishing\u2026" : "Publish to staff"}
+            </button>
+          </>
         ) : null}
       </div>
     </section>
@@ -613,10 +662,10 @@ function DashboardView({
 
 function TipsView({
   result,
-  uploads
+  publish
 }: {
   result: CalculationResult;
-  uploads: UploadSummary[];
+  publish: PublishController;
 }) {
   if (!result.capabilities.hasTimesheet) {
     return (
@@ -646,7 +695,7 @@ function TipsView({
     <div className="view-stack">
       <TipSummaryStrip result={result} />
       <EdgeCasePanel result={result} />
-      <EmployeeTable result={result} uploads={uploads} />
+      <EmployeeTable result={result} publish={publish} />
       <UnallocatedOrders result={result} />
     </div>
   );
@@ -706,7 +755,14 @@ function EmptyView({
  * Saved periods. Deliberately plain: a list you can open, with the payout table and the
  * files it came from. Everything expensive already happened when the period was saved.
  */
-function HistoryView() {
+function HistoryView({
+  hasUnpublished,
+  onOpenCurrent
+}: {
+  /** A calculation is on screen but has not been published to staff yet. */
+  hasUnpublished: boolean;
+  onOpenCurrent: () => void;
+}) {
   const [periods, setPeriods] = useState<HistoryPeriod[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -754,10 +810,17 @@ function HistoryView() {
   if (periods.length === 0) {
     return (
       <section className="panel-card empty-view">
-        <strong>Nothing saved yet</strong>
+        <strong>No periods saved yet</strong>
         <span>
-          Calculate a period and press &ldquo;Publish to staff&rdquo; to keep it here.
+          {hasUnpublished
+            ? "Your current calculation has not reached History yet. Open it and calculate again to save it."
+            : "Import a sales report and a timesheet on the Dashboard, then calculate. Every period you calculate is saved here."}
         </span>
+        {hasUnpublished ? (
+          <button className="primary-button" type="button" onClick={onOpenCurrent}>
+            Open the current calculation
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -779,7 +842,14 @@ function HistoryView() {
               onClick={() => setOpenId(isOpen ? null : period.id)}
             >
               <span className="history-title">
-                <strong>{period.label}</strong>
+                <strong>
+                  {period.label}
+                  {/* Staff only ever see published periods, so the difference has to be
+                      visible at a glance rather than implied. */}
+                  <span className={period.status === "published" ? "state-pill live" : "state-pill"}>
+                    {period.status === "published" ? "Shared with staff" : "Manager only"}
+                  </span>
+                </strong>
                 <small>
                   Saved {new Date(period.published_at).toLocaleDateString()} ·{" "}
                   {period.payouts.length}{" "}
@@ -2352,20 +2422,38 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
  * Only the per-person totals are sent. The uploaded Clover reports never leave the
  * browser, so no sales or card data is stored.
  */
-function PublishPanel({
-  result,
-  uploads
-}: {
-  result: CalculationResult;
-  uploads: UploadSummary[];
-}) {
+/**
+ * Publishing is what actually saves a period, so the action lives in the header next to
+ * the period it will save. This hook holds the work; the header owns the button and the
+ * confirmation dialog is rendered once at the top of the app.
+ */
+function usePublish(result: CalculationResult | null, uploads: UploadSummary[]) {
   const [state, setState] = useState<PublishState>({ status: "idle", message: "" });
   const [isPublishing, setIsPublishing] = useState(false);
 
   async function handlePublish(replaceExisting = false) {
+    if (!result) {
+      return;
+    }
     setIsPublishing(true);
     setState({ status: "idle", message: "" });
 
+    const next = await publishPayouts({ ...buildPublishInput(result, uploads), replaceExisting });
+
+    setState(next);
+    setIsPublishing(false);
+  }
+
+  return {
+    state,
+    isPublishing,
+    publish: handlePublish,
+    dismiss: () => setState({ status: "idle", message: "" })
+  };
+}
+
+/** The saved shape of a period. Uploaded reports are never part of it. */
+function buildPublishInput(result: CalculationResult, uploads: UploadSummary[]): PublishInput {
     const dates = result.salesOrders
       .map((order) => order.orderDate)
       .filter((date): date is Date => Boolean(date))
@@ -2373,7 +2461,7 @@ function PublishPanel({
     const isoDate = (date: Date | undefined) =>
       date ? date.toISOString().slice(0, 10) : null;
 
-    const next = await publishPayouts({
+    return {
       label: formatDateRange(result),
       startsOn: isoDate(dates[0]),
       endsOn: isoDate(dates[dates.length - 1]),
@@ -2400,21 +2488,22 @@ function PublishPanel({
         employeeCount: result.employees.length,
         orderTypeMix: buildOrderTypeMix(result),
         eventTips: roundMoney(result.metrics.eventTips)
-      },
-      replaceExisting
-    });
+      }
+    };
+}
 
-    setState(next);
-    setIsPublishing(false);
-  }
+type PublishController = ReturnType<typeof usePublish>;
 
+/** Sits under the payout table: says what publishing does and how the last one went. */
+function PublishPanel({ publish }: { publish: PublishController }) {
+  const { state, isPublishing } = publish;
   return (
     <section className="publish-panel">
       <div>
         <strong>Share this week with staff</strong>
         <small>
-          Publishes each person&rsquo;s total so they can sign in and see their own tips.
-          Uploaded reports are never stored.
+          &ldquo;Publish to staff&rdquo; saves this period to History and puts each
+          person&rsquo;s total on their own sign-in. The uploaded reports are never stored.
         </small>
       </div>
       <div className="publish-actions">
@@ -2422,20 +2511,22 @@ function PublishPanel({
           <span className={state.status === "error" ? "publish-error" : "publish-ok"}>
             {state.message}
           </span>
+        ) : isPublishing ? (
+          <span className="publish-ok">Publishing\u2026</span>
         ) : null}
-        <button
-          className="secondary-button compact"
-          type="button"
-          onClick={() => handlePublish(false)}
-          disabled={isPublishing || !result.employees.length}
-        >
-          <Users aria-hidden="true" size={17} />
-          {isPublishing ? "Publishing..." : "Publish to staff"}
-        </button>
       </div>
+    </section>
+  );
+}
 
-      {/* Replacing a saved period changes figures staff may have already seen, so it
-          always asks first rather than quietly overwriting. */}
+/**
+ * Replacing a saved period changes figures staff may have already seen, so it always
+ * asks first rather than quietly overwriting.
+ */
+function PublishConfirm({ publish }: { publish: PublishController }) {
+  const { state, isPublishing } = publish;
+  return (
+    <>
       {state.status === "confirm" ? (
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Replace saved period">
           <div className="confirm-card">
@@ -2445,7 +2536,7 @@ function PublishPanel({
               <button
                 className="secondary-button compact"
                 type="button"
-                onClick={() => setState({ status: "idle", message: "" })}
+                onClick={publish.dismiss}
               >
                 Cancel
               </button>
@@ -2453,7 +2544,7 @@ function PublishPanel({
                 className="primary-button compact"
                 type="button"
                 disabled={isPublishing}
-                onClick={() => handlePublish(true)}
+                onClick={() => publish.publish(true)}
               >
                 {isPublishing ? "Replacing..." : "Replace it"}
               </button>
@@ -2461,28 +2552,38 @@ function PublishPanel({
           </div>
         </div>
       ) : null}
-    </section>
+    </>
   );
 }
 
 function EmployeeTable({
   result,
-  uploads
+  publish
 }: {
   result: CalculationResult;
-  uploads: UploadSummary[];
+  publish: PublishController;
 }) {
   const [employeeQuery, setEmployeeQuery] = useState("");
+  // Was a filter icon that did nothing. Anyone rostered but never clocked in shows up
+  // owed $0, which is the one row people actually want out of the way.
+  const [hideUnpaid, setHideUnpaid] = useState(false);
+  const unpaidCount = useMemo(
+    () => result.employees.filter((employee) => employee.tipShare <= 0).length,
+    [result.employees]
+  );
   const visibleEmployees = useMemo(() => {
     const query = normalizeSearch(employeeQuery);
+    const pool = hideUnpaid
+      ? result.employees.filter((employee) => employee.tipShare > 0)
+      : result.employees;
     if (!query) {
-      return result.employees;
+      return pool;
     }
 
-    return result.employees.filter((employee) =>
+    return pool.filter((employee) =>
       normalizeSearch(employee.employee).includes(query)
     );
-  }, [employeeQuery, result.employees]);
+  }, [employeeQuery, hideUnpaid, result.employees]);
 
   // Totals are summed over the rows actually shown, not the whole result. With a search
   // active, a footer showing the unfiltered payout reads as the total of the visible rows
@@ -2527,16 +2628,26 @@ function EmployeeTable({
               onChange={(event) => setEmployeeQuery(event.target.value)}
             />
           </label>
-          <button className="icon-button" aria-label="Filter employees" type="button">
-            <SlidersHorizontal aria-hidden="true" size={16} />
-          </button>
+          {unpaidCount > 0 ? (
+            <button
+              className={hideUnpaid ? "filter-toggle on" : "filter-toggle"}
+              type="button"
+              aria-pressed={hideUnpaid}
+              onClick={() => setHideUnpaid((on) => !on)}
+            >
+              <SlidersHorizontal aria-hidden="true" size={16} />
+              {hideUnpaid
+                ? `Showing paid only (${unpaidCount} hidden)`
+                : `Hide ${unpaidCount} with no tips`}
+            </button>
+          ) : null}
         </div>
         <span>
           {formatCurrency(result.metrics.totalAllocatedTips)} allocated across{" "}
           {result.metrics.employeesFound} employees
         </span>
       </div>
-      <PublishPanel result={result} uploads={uploads} />
+      <PublishPanel publish={publish} />
       {/* The method is the point of the app, not an implementation detail: tips follow who
           was clocked in for each order, not hours worked. Saying so here heads off the
           "why did they get more than me on fewer hours" question. */}
@@ -2681,6 +2792,7 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
           {warnings.length ? (
             <details className="warning-details">
               <summary>
+                <AlertTriangle aria-hidden="true" size={17} />
                 <span>
                   Review {warnings.length} warning{warnings.length === 1 ? "" : "s"}
                 </span>
@@ -2702,7 +2814,8 @@ function IssueList({ issues }: { issues: ValidationIssue[] }) {
         <li className={issue.severity} key={`${issue.source}-${issue.row ?? "all"}-${index}`}>
           <AlertTriangle aria-hidden="true" size={17} />
           <span>
-            <strong>{issue.severity}</strong>
+            <strong>{issue.severity === "error" ? "Needs fixing" : "Worth checking"}</strong>
+            {" \u00b7 "}
             {formatIssue(issue)}
           </span>
         </li>
@@ -3321,14 +3434,21 @@ function formatPool(pool: "store" | "event"): string {
   return pool === "event" ? "Event" : "Store";
 }
 
+/** Where a notice came from, said the way a manager would say it. */
+const ISSUE_SOURCE_LABELS: Record<ValidationIssue["source"], string> = {
+  sales: "Sales file",
+  timesheet: "Timesheet",
+  calculation: "Tip split"
+};
+
 function formatIssue(issue: ValidationIssue): string {
-  const pieces: string[] = [issue.source];
+  const pieces: string[] = [ISSUE_SOURCE_LABELS[issue.source]];
   if (issue.row) {
     pieces.push(`row ${issue.row}`);
   }
   if (issue.field) {
-    pieces.push(issue.field);
+    pieces.push(`\u201c${issue.field}\u201d column`);
   }
 
-  return `: ${pieces.join(" - ")} - ${issue.message}`;
+  return `${pieces.join(", ")} \u2014 ${issue.message}`;
 }
