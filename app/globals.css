@@ -2384,14 +2384,26 @@ tfoot td {
     flex-direction: column;
   }
 
-  .dashboard-actions,
-  .setup-actions {
+  /* The desktop rule gives the title block a 260px flex basis. Stacked, that basis is a
+     HEIGHT, which left a screen-deep hole between the heading and the buttons. */
+  .dashboard-title {
+    flex: 0 0 auto;
     width: 100%;
   }
 
+  .dashboard-actions,
+  .setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  /* Two per row rather than one full-width button per line, so the actions do not
+     become a column of slabs taller than the content they act on. */
   .dashboard-actions > button,
   .setup-actions > button {
-    flex: 1;
+    flex: 1 1 calc(50% - 5px);
+    min-width: 0;
   }
 
   .tip-summary-grid {
@@ -2605,16 +2617,30 @@ tfoot td {
 @media (max-width: 560px) {
   .dashboard-main {
     padding: 18px 12px 34px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: calc(34px + env(safe-area-inset-bottom));
   }
 
+  /* Still two per row. A column of four full-width buttons was taller than the panel
+     they belong to. */
   .dashboard-actions,
   .setup-actions {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .dashboard-actions > button,
   .setup-actions > button {
-    width: 100%;
+    flex: 1 1 calc(50% - 5px);
+    width: auto;
+    min-width: 0;
+  }
+
+  .primary-button.compact,
+  .secondary-button.compact,
+  .danger-button.compact {
+    min-width: 0;
   }
 
   .executive-card,
