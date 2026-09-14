@@ -21,9 +21,11 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "ShiftFlow",
-    // The page runs under the status bar so the app's own colour shows there instead of
-    // an iOS-white strip. globals.css paints that area and pads the content past it.
-    statusBarStyle: "black-translucent",
+    // "default", not "black-translucent". The translucent mode is a legacy flag that
+    // stops iOS tinting the status bar from theme-color and leaves the clock in dark
+    // text over our dark green. With it off, iOS paints the bar in theme-color and
+    // picks the legible tint itself, which is what a native app looks like.
+    statusBarStyle: "default",
     // Generated alongside the images themselves; iOS shows a blank white screen for
     // any device size that is not listed here.
     startupImage: splashDevices
