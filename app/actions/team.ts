@@ -20,7 +20,8 @@ export async function loadTeam(): Promise<TeamState> {
     return { members: [], invites: [], canManage: false };
   }
 
-  const [{ data: members }, { data: invites }] = await Promise.all([
+  const [{ data: members, error: membersError }, { data: invites, error: invitesError }] =
+    await Promise.all([
     supabase
       .from("store_members")
       .select("user_id, role, employee_key, profiles(email, full_name)")
@@ -31,6 +32,15 @@ export async function loadTeam(): Promise<TeamState> {
       .eq("store_id", storeId)
       .order("created_at", { ascending: false })
   ]);
+
+  // Swallowing these is how the team list sat empty for a broken query rather than
+  // saying anything at all.
+  if (membersError) {
+    console.error("loading team members failed", membersError);
+  }
+  if (invitesError && invitesError.code !== "42501") {
+    console.error("loading invites failed", invitesError);
+  }
 
   return {
     // Only a manager can read invites at all, so their presence is the permission signal.

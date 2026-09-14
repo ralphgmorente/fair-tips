@@ -75,9 +75,12 @@ async function findExistingPeriod(
     return null;
   }
 
+  // Scoped to this store: two businesses can legitimately upload a byte-identical
+  // export, and matching across them would have one store's period claim the other's.
   const { data: byHash } = await supabase
     .from("report_uploads")
-    .select("pay_period_id, pay_periods(id, label, status)")
+    .select("pay_period_id, pay_periods!inner(id, label, status, store_id)")
+    .eq("pay_periods.store_id", storeId)
     .in("content_hash", hashes)
     .limit(1)
     .maybeSingle();
