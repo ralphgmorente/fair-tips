@@ -2621,7 +2621,18 @@ function UploadPanel({
       {statusText ? <span className="upload-status">{statusText}</span> : null}
       {/* A whole sentence, on its own row. As a badge beside the file name it was
           clipped at the edge of the card, which hid the half that says what to do. */}
-      {isError ? <span className="upload-error">{upload.error}</span> : null}
+      {isError ? (
+        <span className="upload-error">
+          {upload.error}
+          {/* The whole card is the file picker, but in the error state that is not
+              obvious — it reads as a dead-end message. This says the box is still
+              waiting for a file. */}
+          <span className="upload-retry">
+            <Upload aria-hidden="true" size={15} />
+            Choose another file
+          </span>
+        </span>
+      ) : null}
     </label>
   );
 }

@@ -56,7 +56,8 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
           </button>
         </form>
         <p className="access-note">
-          Accounts are created by an administrator. Contact your manager if you need access.
+          Been invited but never signed up? <a href="/join">Create your account</a>.
+          Otherwise ask your manager for an invitation.
         </p>
       </section>
     </main>

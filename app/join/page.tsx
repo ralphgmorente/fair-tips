@@ -30,6 +30,9 @@ export default function JoinPage() {
           </p>
         </div>
         <JoinForm />
+        <p className="access-note">
+          Already have an account? <a href="/login">Sign in</a>.
+        </p>
       </section>
     </main>
   );
