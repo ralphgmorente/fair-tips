@@ -2340,8 +2340,9 @@ tfoot td {
     gap: 14px;
     height: auto;
     min-height: 0;
+    /* body already carries the top inset; adding it again left a band of empty green
+       as deep as the status bar above the logo. */
     padding: 14px 16px;
-    padding-top: calc(14px + env(safe-area-inset-top));
     padding-left: max(16px, env(safe-area-inset-left));
     padding-right: max(16px, env(safe-area-inset-right));
   }

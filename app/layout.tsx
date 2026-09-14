@@ -31,7 +31,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f7c67",
+  // Matches the band painted behind the status bar, so iOS picks a legible tint for
+  // the clock and battery instead of computing one from a lighter colour.
+  themeColor: "#074d40",
   width: "device-width",
   initialScale: 1,
   // Installed apps should not rubber-band like a web page, but pinch zoom stays
