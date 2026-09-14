@@ -435,6 +435,7 @@ export function DashboardClient({
       <main className="dashboard-main">
         <DashboardHeader
           title={pageTitle}
+          activeView={activeView}
           result={result}
           hasErrors={hasErrors}
           user={user}
@@ -548,7 +549,7 @@ function AppSidebar({
         })}
       </nav>
 
-      {result ? (
+      {result && (activeView === "dashboard" || activeView === "tips") ? (
         <PayoutChecklist result={result} activeView={activeView} onJump={onJump} />
       ) : null}
     </aside>
@@ -630,6 +631,7 @@ function PayoutChecklist({
 
 function DashboardHeader({
   title,
+  activeView,
   result,
   hasErrors,
   user,
@@ -642,6 +644,7 @@ function DashboardHeader({
   isPublishing
 }: {
   title: string;
+  activeView: AppView;
   result: CalculationResult | null;
   hasErrors: boolean;
   user: SessionUser;
@@ -653,17 +656,21 @@ function DashboardHeader({
   onPublish: () => void;
   isPublishing: boolean;
 }) {
+  const showsCalculation = activeView === "dashboard" || activeView === "tips";
+
   return (
     <section className="dashboard-header">
       <div className="dashboard-title">
         <div className="title-row">
           <h1>{title}</h1>
-          {result && !hasErrors ? <span className="review-pill ready">Ready to review</span> : null}
+          {showsCalculation && result && !hasErrors ? (
+            <span className="review-pill ready">Ready to review</span>
+          ) : null}
         </div>
         {/* Before a calculation there is no period and nothing to export, so neither is
             shown. Repeating "Setup required" beside a screen that already says it in
             four other places was most of why this felt busy. */}
-        {result ? (
+        {showsCalculation && result ? (
           <div className="period-control" aria-label="Pay period">
             <CalendarDays aria-hidden="true" size={17} />
             <span>{formatDateRange(result)}</span>
@@ -681,7 +688,7 @@ function DashboardHeader({
             <span className="role-pill">{user.role === "admin" ? "Admin" : "Manager"}</span>
           ) : null}
         </span>
-        {showReportSetup ? null : (
+        {showReportSetup || !showsCalculation ? null : (
           <button className="secondary-button compact" type="button" onClick={onNewReport}>
             <RotateCcw aria-hidden="true" size={17} />
             Start fresh
@@ -696,7 +703,7 @@ function DashboardHeader({
           <LockKeyhole aria-hidden="true" size={17} />
           {isSigningOut ? "Signing out..." : "Sign out"}
         </button>
-        {result && !hasErrors && result.capabilities.hasTipDistribution ? (
+        {showsCalculation && result && !hasErrors && result.capabilities.hasTipDistribution ? (
           <>
             <button className="secondary-button compact" type="button" onClick={onExport}>
               <Download aria-hidden="true" size={17} />
@@ -1109,7 +1116,27 @@ function HistoryView({
                   <p className="form-error">{actionError}</p>
                 ) : null}
 
-                <div className="table-scroll">
+                {/* Same compact list as the live payout table, for the same reason. */}
+                <ul className="payout-list">
+                  {sortedPayouts.map((payout) => (
+                    <li key={payout.employee_name}>
+                      <span className="employee-avatar">
+                        {employeeInitials(payout.employee_name)}
+                      </span>
+                      <span className="payout-who">
+                        <strong>{payout.employee_name}</strong>
+                        <small>
+                          {formatNumber(Number(payout.paid_hours))} h &middot;{" "}
+                          {formatPercent(Number(payout.share_percent))} of tips
+                        </small>
+                      </span>
+                      <span className="payout-amount">
+                        {formatCurrency(Number(payout.total_tips))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="table-scroll history-table">
                   <table className="summary-table">
                     <thead>
                       <tr>
@@ -1259,9 +1286,9 @@ function WorkspaceSettingsForm({
       <div>
         <strong>Event terminal</strong>
         <span>
-          The machine taken to offsite events, exactly as it appears in the Device column
-          of a Payments export. Sales on it become event sales, and their tips go to staff
-          on an Evento shift. Leave blank to rely on the CLOVERGO order number instead.
+          The machine you take to offsite events, named exactly as Clover writes it.
+          Sales on it are kept separate and their tips go to whoever worked the event.
+          Leave blank if you do not run events.
         </span>
         <div className="ignored-names-row">
           <input
@@ -1275,10 +1302,10 @@ function WorkspaceSettingsForm({
       </div>
 
       <div>
-        <strong>Till accounts to ignore</strong>
+        <strong>Names that are not staff</strong>
         <span>
-          Names that appear on sales but are not staff — an old owner&rsquo;s login still
-          on a terminal, for example. Separate with commas.
+          Logins that show up on sales but belong to nobody who earns tips, such as an
+          old owner&rsquo;s account left on a terminal. Separate with commas.
         </span>
         <div className="ignored-names-row">
           <input
@@ -1373,9 +1400,9 @@ function TeamSettings() {
     <div>
       <strong>Team</strong>
       <span>
-        Invite someone by email. They set their own password, and only invited addresses
-        can register. Staff need their name exactly as it appears on the timesheet, or
-        their payouts will not find them.
+        Invite by email; they choose their own password. Nobody can register without an
+        invitation. Give staff their name exactly as the timesheet spells it, or their
+        payout will not find them.
       </span>
 
       <ul className="team-list">
@@ -1466,23 +1493,11 @@ function SettingsView({
   onSettingsChange: (next: WorkspaceSettings) => void;
 }) {
   return (
+    // The page is already titled Settings, and the two paragraphs that used to open it
+    // described the product rather than offering anything to change. One of them also
+    // still claimed there was no self-signup, which invitations replaced.
     <section className="panel-card settings-panel">
-      <div className="panel-heading">
-        <h2>Settings</h2>
-        <span>Current workspace</span>
-      </div>
       <div className="settings-list">
-        <div>
-          <strong>Exports</strong>
-          <span>Excel payout files use the latest validated calculation.</span>
-        </div>
-        <div>
-          <strong>Access</strong>
-          <span>
-            Each manager signs in with their own account. Accounts are created by an
-            administrator; there is no self-signup.
-          </span>
-        </div>
         <WorkspaceSettingsForm settings={settings} onSettingsChange={onSettingsChange} />
         <TeamSettings />
       </div>
