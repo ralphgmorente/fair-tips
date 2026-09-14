@@ -1686,8 +1686,13 @@ body::before {
   flex: 0 0 auto;
 }
 
-.setup-validation:not(.error) {
+.setup-validation:not(.error):not(.pending) {
   color: var(--accent-dark);
+}
+
+/* Something is still missing. Green with a warning triangle read as "all good". */
+.setup-validation.pending {
+  color: var(--warning);
 }
 
 .setup-validation.error {
@@ -2359,7 +2364,9 @@ tfoot td {
   .sidebar-nav button {
     width: auto;
     min-width: max-content;
-    padding-right: 14px;
+    gap: 7px;
+    padding: 0 10px;
+    font-size: 0.88rem;
   }
 
   .sidebar-support {

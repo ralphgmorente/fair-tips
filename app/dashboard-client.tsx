@@ -2521,7 +2521,15 @@ function ReportSetupPanel({
         />
       </div>
       <div className="setup-footer">
-        <div className={result && errors ? "setup-validation error" : "setup-validation"}>
+        <div
+          className={
+            result && errors
+              ? "setup-validation error"
+              : missingUpload || blockingUploadError
+                ? "setup-validation pending"
+                : "setup-validation"
+          }
+        >
           {(result && errors) || blockingUploadError || missingUpload ? (
             <AlertTriangle aria-hidden="true" size={18} />
           ) : null}
