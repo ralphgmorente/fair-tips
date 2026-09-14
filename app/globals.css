@@ -60,6 +60,15 @@ input {
   border-radius: 8px;
 }
 
+/* Inside a panel that clips its corners, an offset ring is sliced into stray lines.
+   Draw it just within the edge instead. */
+.warning-details summary:focus-visible,
+.history-head:focus-visible,
+.upload-panel:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* Accent green on the dark rail would be nearly invisible. */
 .app-sidebar :where(a, button):focus-visible {
   outline-color: #ffffff;
@@ -1809,6 +1818,12 @@ body::before {
   }
 }
 
+/* A saved period has four columns, which fit anywhere. The shared 1040px floor was
+   pushing Tips and Share off the right-hand edge of the card. */
+.history-table table {
+  min-width: 0;
+}
+
 .setup-footer {
   display: flex;
   align-items: center;
@@ -2041,7 +2056,9 @@ body::before {
   display: none;
 }
 
-.warning-details[open] summary svg {
+/* Only the chevron turns. This was rotating every icon in the row, so opening the
+   panel stood the warning triangle on its head. */
+.warning-details[open] summary .summary-chevron {
   transform: rotate(180deg);
 }
 

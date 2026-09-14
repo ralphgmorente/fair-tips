@@ -66,10 +66,10 @@ export async function renamePeriod(
 }
 
 /**
- * Flips who can see a period.
+ * Publishes a period to staff, or takes it back to a draft.
  *
- * Unsharing does not delete anything: the figures stay in History for managers, they
- * just leave the staff's own sign-in until they are shared again.
+ * Unpublishing deletes nothing: the figures stay in History for managers, they just
+ * leave the staff's own sign-in until the period is published again.
  */
 export async function setPeriodShared(
   periodId: string,
@@ -88,14 +88,14 @@ export async function setPeriodShared(
 
   if (error) {
     console.error("changing period visibility failed", error);
-    return { ok: false, message: "Could not change who can see this period." };
+    return { ok: false, message: "Could not change whether this period is published." };
   }
 
   revalidatePath("/history");
   revalidatePath("/my-tips");
   return {
     ok: true,
-    message: shared ? "Shared with staff." : "Hidden from staff."
+    message: shared ? "Published to staff." : "Unpublished \u2014 staff can no longer see it."
   };
 }
 

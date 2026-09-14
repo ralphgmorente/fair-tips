@@ -1010,7 +1010,7 @@ function HistoryView({
                   {/* Staff only ever see published periods, so the difference has to be
                       visible at a glance rather than implied. */}
                   <span className={period.status === "published" ? "state-pill live" : "state-pill"}>
-                    {period.status === "published" ? "Shared with staff" : "Manager only"}
+                    {period.status === "published" ? "Published" : "Draft"}
                   </span>
                 </strong>
                 <small>
@@ -1098,7 +1098,7 @@ function HistoryView({
                         }
                       >
                         <Users aria-hidden="true" size={16} />
-                        {isShared ? "Hide from staff" : "Share with staff"}
+                        {isShared ? "Unpublish" : "Publish to staff"}
                       </button>
                       <button
                         className="danger-button compact"
@@ -2819,10 +2819,11 @@ function PublishPanel({ publish }: { publish: PublishController }) {
   return (
     <section className="publish-panel">
       <div>
-        <strong>Share this week with staff</strong>
+        <strong>Publishing this period</strong>
         <small>
-          &ldquo;Publish to staff&rdquo; saves this period to History and puts each
-          person&rsquo;s total on their own sign-in. The uploaded reports are never stored.
+          Publishing puts each person&rsquo;s total on their own sign-in. Until then the
+          period stays a draft that only managers can see. The uploaded reports are never
+          stored either way.
         </small>
       </div>
       <div className="publish-actions">
@@ -3175,7 +3176,7 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
                 <span>
                   Review {warnings.length} warning{warnings.length === 1 ? "" : "s"}
                 </span>
-                <ChevronDown aria-hidden="true" size={18} />
+                <ChevronDown className="summary-chevron" aria-hidden="true" size={18} />
               </summary>
               <IssueList issues={warnings} />
             </details>
