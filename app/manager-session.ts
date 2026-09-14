@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { currentStoreId } from "@/lib/current-store";
 import type { SessionUser } from "./dashboard-client";
 
 /**
@@ -31,15 +32,31 @@ export async function requireManager(): Promise<SessionUser> {
     .eq("id", claims.sub)
     .maybeSingle();
 
+  // The role that counts is the one held at this store, not the account's old global
+  // one. They can disagree — someone can be a manager at one venue and staff at
+  // another — and every rule in the database now reads the per-store role, so this
+  // gate has to as well.
+  const storeId = await currentStoreId(supabase);
+  const { data: membership } = storeId
+    ? await supabase
+        .from("store_members")
+        .select("role")
+        .eq("store_id", storeId)
+        .eq("user_id", claims.sub)
+        .maybeSingle()
+    : { data: null };
+
+  const role = membership?.role ?? profile?.role ?? "manager";
+
   // Staff have no business on the manager views, which show everyone's payout. The
   // redirect is the friendly path; row level security is what actually stops them.
-  if (profile?.role === "staff") {
+  if (role === "staff") {
     redirect("/my-tips");
   }
 
   return {
     email: profile?.email ?? (typeof claims.email === "string" ? claims.email : ""),
     fullName: profile?.full_name ?? "",
-    role: profile?.role ?? "manager"
+    role
   };
 }
