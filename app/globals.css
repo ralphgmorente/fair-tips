@@ -2748,9 +2748,14 @@ tfoot td {
   flex: none;
 }
 
+/* Who you are signed in as, and what that lets you do, matters just as much on a
+   phone. It was hidden here entirely. */
 @media (max-width: 720px) {
   .session-identity {
-    display: none;
+    order: -1;
+    max-width: 100%;
+    width: 100%;
+    padding: 0;
   }
 }
 
