@@ -2346,27 +2346,27 @@ tfoot td {
     padding-right: max(16px, env(safe-area-inset-right));
   }
 
+  /* Four tabs, one row, no sideways scrolling: a tab half off the edge is a tab nobody
+     finds. They share the width evenly instead. */
   .sidebar-nav {
     display: flex;
-    align-content: stretch;
-    gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    /* Swiping the tab strip sideways must not fight the page scrolling down. */
-    touch-action: pan-x;
-    scrollbar-width: none;
-  }
-
-  .sidebar-nav::-webkit-scrollbar {
-    display: none;
+    gap: 6px;
   }
 
   .sidebar-nav button {
+    flex: 1 1 0;
+    justify-content: center;
     width: auto;
-    min-width: max-content;
-    gap: 7px;
-    padding: 0 10px;
-    font-size: 0.88rem;
+    min-width: 0;
+    gap: 6px;
+    padding: 0 6px;
+    font-size: 0.8rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .sidebar-nav button svg {
+    flex: 0 0 auto;
   }
 
   .sidebar-support {
