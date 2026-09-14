@@ -23,6 +23,8 @@ export type PublishableUpload = {
 
 export type PublishInput = {
   label: string;
+  /** Identifies the period so re-running the same week updates it instead of adding one. */
+  periodKey: string;
   startsOn: string | null;
   endsOn: string | null;
   totalTips: number;
@@ -44,6 +46,10 @@ export type PublishInput = {
 export type PublishState = {
   status: "idle" | "ok" | "error" | "confirm";
   message: string;
+  /** The saved period this call acted on, once there is one. */
+  periodId?: string;
+  /** Whether staff can currently see it. */
+  published?: boolean;
 };
 
 /**
@@ -118,9 +124,9 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
   }
 
   // Identify the period by its dates so republishing the same week corrects the figures
-  // instead of listing that week twice with no way to tell which one is owed.
-  const periodKey =
-    input.startsOn && input.endsOn ? `${input.startsOn}_${input.endsOn}` : input.label;
+  // instead of listing that week twice with no way to tell which one is owed. The client
+  // builds the same key, so it can look a period up before offering to publish it.
+  const periodKey = input.periodKey;
 
   const storeId = await currentStoreId(supabase);
   if (!storeId) {
@@ -149,6 +155,11 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
 
   const existing = match?.period ?? null;
 
+  // Recalculating a period that staff can already see must not quietly take it away
+  // from them: a draft save never demotes a published period.
+  const nextStatus =
+    status === "draft" && existing?.status === "published" ? "published" : status;
+
   const { data: period, error: periodError } = await supabase
     .from("pay_periods")
     .upsert(
@@ -158,7 +169,7 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
         label: input.label,
         starts_on: input.startsOn,
         ends_on: input.endsOn,
-        status,
+        status: nextStatus,
         total_tips: input.totalTips,
         allocated_tips: input.allocatedTips,
         unallocated_tips: input.unallocatedTips,
@@ -234,16 +245,21 @@ export async function publishPayouts(input: PublishInput): Promise<PublishState>
     }
   }
 
+  const published = nextStatus === "published";
+
   if (status === "draft") {
-    return { status: "ok", message: "Saved to History." };
+    return { status: "ok", message: "Saved to History.", periodId: period.id, published };
   }
 
   const count = `${rows.length} ${rows.length === 1 ? "payout" : "payouts"}`;
   return {
     status: "ok",
-    message: existing
-      ? `Updated this period for staff — ${count}, replacing what was published before.`
-      : `Published ${count} to staff.`
+    message:
+      existing?.status === "published"
+        ? `Updated this period for staff — ${count}, replacing what they saw before.`
+        : `Published ${count} to staff.`,
+    periodId: period.id,
+    published
   };
 }
 

@@ -33,6 +33,31 @@ async function managerContext(): Promise<ManagerContext> {
   return { ok: true, supabase, storeId };
 }
 
+export type SavedPeriodState = { periodId: string; published: boolean } | null;
+
+/**
+ * The saved state of a period, by its date range.
+ *
+ * A calculation restored from the browser on the next visit has no idea whether it was
+ * ever published, which left the header offering to publish something staff could
+ * already see.
+ */
+export async function findSavedPeriod(periodKey: string): Promise<SavedPeriodState> {
+  const context = await managerContext();
+  if (!context.ok) {
+    return null;
+  }
+
+  const { data } = await context.supabase
+    .from("pay_periods")
+    .select("id, status")
+    .eq("store_id", context.storeId)
+    .eq("period_key", periodKey)
+    .maybeSingle();
+
+  return data ? { periodId: data.id, published: data.status === "published" } : null;
+}
+
 export async function renamePeriod(
   periodId: string,
   label: string

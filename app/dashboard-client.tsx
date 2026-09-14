@@ -44,6 +44,7 @@ import {
 import { loadHistory, type HistoryPeriod } from "@/app/actions/load-history";
 import {
   deletePeriod,
+  findSavedPeriod,
   renamePeriod,
   setPeriodShared,
   type PeriodActionState
@@ -445,6 +446,8 @@ export function DashboardClient({
           onNewReport={handleReset}
           onExport={handleExport}
           onPublish={() => publish.publish(false)}
+          onUnpublish={publish.unpublish}
+          isPublished={publish.isPublished}
           isPublishing={publish.isPublishing}
         />
 
@@ -641,6 +644,8 @@ function DashboardHeader({
   onNewReport,
   onExport,
   onPublish,
+  onUnpublish,
+  isPublished,
   isPublishing
 }: {
   title: string;
@@ -654,6 +659,8 @@ function DashboardHeader({
   onNewReport: () => void;
   onExport: () => void;
   onPublish: () => void;
+  onUnpublish: () => void;
+  isPublished: boolean;
   isPublishing: boolean;
 }) {
   const showsCalculation = activeView === "dashboard" || activeView === "tips";
@@ -709,14 +716,21 @@ function DashboardHeader({
               <Download aria-hidden="true" size={17} />
               Export Excel
             </button>
+            {/* Once staff can see it, the action that remains is taking it back. */}
             <button
-              className="primary-button compact"
+              className={isPublished ? "secondary-button compact" : "primary-button compact"}
               type="button"
-              onClick={onPublish}
+              onClick={isPublished ? onUnpublish : onPublish}
               disabled={isPublishing || result.employees.length === 0}
             >
               <Users aria-hidden="true" size={18} />
-              {isPublishing ? "Publishing\u2026" : "Publish to staff"}
+              {isPublishing
+                ? isPublished
+                  ? "Unpublishing\u2026"
+                  : "Publishing\u2026"
+                : isPublished
+                  ? "Unpublish to staff"
+                  : "Publish to staff"}
             </button>
           </>
         ) : null}
@@ -1098,7 +1112,7 @@ function HistoryView({
                         }
                       >
                         <Users aria-hidden="true" size={16} />
-                        {isShared ? "Unpublish" : "Publish to staff"}
+                        {isShared ? "Unpublish to staff" : "Publish to staff"}
                       </button>
                       <button
                         className="danger-button compact"
@@ -1253,32 +1267,43 @@ function WorkspaceSettingsForm({
 }) {
   const [device, setDevice] = useState(settings.eventDeviceName);
   const [names, setNames] = useState(settings.ignoredSalesNames.join(", "));
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState({ message: "", ok: true });
+  /** Which field is mid-save, so one Save button cannot speak for the other. */
+  const [saving, setSaving] = useState<"device" | "names" | null>(null);
+  const [feedback, setFeedback] = useState<{ field: string; message: string; ok: boolean }>({
+    field: "",
+    message: "",
+    ok: true
+  });
 
   useEffect(() => {
     setDevice(settings.eventDeviceName);
     setNames(settings.ignoredSalesNames.join(", "));
   }, [settings]);
 
-  async function handleSave() {
-    setSaving(true);
-    setFeedback({ message: "", ok: true });
+  const parsedNames = names
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const deviceChanged = device.trim() !== settings.eventDeviceName;
+  const namesChanged = parsedNames.join("\u0000") !== settings.ignoredSalesNames.join("\u0000");
 
-    const next: WorkspaceSettings = {
-      eventDeviceName: device.trim(),
-      ignoredSalesNames: names
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean)
-    };
+  // These are two unrelated settings, so each saves on its own. A single Save beside the
+  // second field looked like it only applied to that one.
+  async function save(field: "device" | "names") {
+    setSaving(field);
+    setFeedback({ field: "", message: "", ok: true });
+
+    const next: WorkspaceSettings =
+      field === "device"
+        ? { eventDeviceName: device.trim(), ignoredSalesNames: settings.ignoredSalesNames }
+        : { eventDeviceName: settings.eventDeviceName, ignoredSalesNames: parsedNames };
 
     const result = await saveWorkspaceSettings(next);
     if (result.ok) {
       onSettingsChange(next);
     }
-    setSaving(false);
-    setFeedback({ message: result.message, ok: result.ok });
+    setSaving(null);
+    setFeedback({ field, message: result.message, ok: result.ok });
   }
 
   return (
@@ -1298,7 +1323,20 @@ function WorkspaceSettingsForm({
             onChange={(event) => setDevice(event.target.value)}
             aria-label="Event terminal"
           />
+          <button
+            className="secondary-button compact"
+            type="button"
+            onClick={() => save("device")}
+            disabled={saving !== null || !deviceChanged}
+          >
+            {saving === "device" ? "Saving\u2026" : "Save"}
+          </button>
         </div>
+        {feedback.field === "device" && feedback.message ? (
+          <span className={feedback.ok ? "publish-ok" : "publish-error"}>
+            {feedback.message}
+          </span>
+        ) : null}
       </div>
 
       <div>
@@ -1318,19 +1356,19 @@ function WorkspaceSettingsForm({
           <button
             className="secondary-button compact"
             type="button"
-            onClick={handleSave}
-            disabled={saving}
+            onClick={() => save("names")}
+            disabled={saving !== null || !namesChanged}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving === "names" ? "Saving\u2026" : "Save"}
           </button>
         </div>
-        {feedback.message ? (
+        {feedback.field === "names" && feedback.message ? (
           <span className={feedback.ok ? "publish-ok" : "publish-error"}>
             {feedback.message}
           </span>
         ) : (
           <span className="settings-hint">
-            Saved for everyone, and applied on the next calculation.
+            Both settings are shared by everyone here, and apply on the next calculation.
           </span>
         )}
       </div>
@@ -2738,8 +2776,9 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
 /**
  * Publishes the calculated payouts so staff can sign in and see their own line.
  *
- * Only the per-person totals are sent. The uploaded Clover reports never leave the
- * browser, so no sales or card data is stored.
+ * Only the per-person totals go to the database, together with each file's name, row
+ * count and a hash used to recognise a re-upload. The Clover exports themselves never
+ * leave the browser, so no sales rows or card data are stored.
  */
 /**
  * Publishing is what actually saves a period, so the action lives in the header next to
@@ -2749,6 +2788,34 @@ function EdgeCasePanel({ result }: { result: CalculationResult }) {
 function usePublish(result: CalculationResult | null, uploads: UploadSummary[]) {
   const [state, setState] = useState<PublishState>({ status: "idle", message: "" });
   const [isPublishing, setIsPublishing] = useState(false);
+  /** null until the saved state of this period is known. */
+  const [saved, setSaved] = useState<{ periodId: string; published: boolean } | null>(null);
+
+  const periodKey = result ? buildPublishInput(result, uploads).periodKey : null;
+
+  // A calculation restored from the browser carries no memory of being published, which
+  // left the header offering to publish a period staff were already looking at.
+  useEffect(() => {
+    if (!periodKey) {
+      setSaved(null);
+      return;
+    }
+    let active = true;
+    findSavedPeriod(periodKey)
+      .then((found) => {
+        if (active) {
+          setSaved(found);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSaved(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [periodKey]);
 
   async function handlePublish(replaceExisting = false) {
     if (!result) {
@@ -2759,19 +2826,39 @@ function usePublish(result: CalculationResult | null, uploads: UploadSummary[]) 
 
     const next = await publishPayouts({ ...buildPublishInput(result, uploads), replaceExisting });
 
+    if (next.periodId) {
+      setSaved({ periodId: next.periodId, published: Boolean(next.published) });
+    }
     setState(next);
+    setIsPublishing(false);
+  }
+
+  async function handleUnpublish() {
+    if (!saved) {
+      return;
+    }
+    setIsPublishing(true);
+    const next = await setPeriodShared(saved.periodId, false);
+    if (next.ok) {
+      setSaved({ ...saved, published: false });
+      setState({ status: "ok", message: next.message });
+    } else {
+      setState({ status: "error", message: next.message });
+    }
     setIsPublishing(false);
   }
 
   return {
     state,
     isPublishing,
+    isPublished: saved?.published ?? false,
     publish: handlePublish,
+    unpublish: handleUnpublish,
     dismiss: () => setState({ status: "idle", message: "" })
   };
 }
 
-/** The saved shape of a period. Uploaded reports are never part of it. */
+/** The saved shape of a period. The rows of the uploaded reports are never part of it. */
 function buildPublishInput(result: CalculationResult, uploads: UploadSummary[]): PublishInput {
     const dates = result.salesOrders
       .map((order) => order.orderDate)
@@ -2780,10 +2867,14 @@ function buildPublishInput(result: CalculationResult, uploads: UploadSummary[]):
     const isoDate = (date: Date | undefined) =>
       date ? date.toISOString().slice(0, 10) : null;
 
+    const startsOn = isoDate(dates[0]);
+    const endsOn = isoDate(dates[dates.length - 1]);
+
     return {
       label: formatDateRange(result),
-      startsOn: isoDate(dates[0]),
-      endsOn: isoDate(dates[dates.length - 1]),
+      periodKey: startsOn && endsOn ? `${startsOn}_${endsOn}` : formatDateRange(result),
+      startsOn,
+      endsOn,
       totalTips: roundMoney(result.metrics.totalTips),
       allocatedTips: roundMoney(result.metrics.totalAllocatedTips),
       unallocatedTips: roundMoney(result.metrics.totalUnallocatedTips),
@@ -2821,9 +2912,10 @@ function PublishPanel({ publish }: { publish: PublishController }) {
       <div>
         <strong>Publishing this period</strong>
         <small>
-          Publishing puts each person&rsquo;s total on their own sign-in. Until then the
-          period stays a draft that only managers can see. The uploaded reports are never
-          stored either way.
+          Calculating already saved it to History, where only managers can see it.
+          Publishing adds each person&rsquo;s total to their own sign-in. The sales files
+          themselves stay in this browser: what is saved is the payout figures, plus the
+          name and row count of each file so you can see where they came from.
         </small>
       </div>
       <div className="publish-actions">
@@ -3172,9 +3264,11 @@ function ValidationPanel({ issues }: { issues: ValidationIssue[] }) {
           {warnings.length ? (
             <details className="warning-details" id="warnings">
               <summary>
-                <AlertTriangle aria-hidden="true" size={17} />
-                <span>
-                  Review {warnings.length} warning{warnings.length === 1 ? "" : "s"}
+                {/* A count, not a fifth identical triangle: the header used the same icon
+                    as every row under it, so it did not read as a header. */}
+                <span className="warning-count" aria-hidden="true">{warnings.length}</span>
+                <span className="summary-label">
+                  {warnings.length === 1 ? "Warning to review" : "Warnings to review"}
                 </span>
                 <ChevronDown className="summary-chevron" aria-hidden="true" size={18} />
               </summary>
